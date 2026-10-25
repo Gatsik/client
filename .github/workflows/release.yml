@@ -226,4 +226,5 @@ jobs:
           body: "SHA256 (Windows): ${{ needs.build-windows.outputs.MSI_SUM }}\nSHA256 (Linux): ${{ needs.build-linux.outputs.TAR_SUM }}"
           draft: true
           prerelease: true
+          immutableCreate: true
           artifacts: "release-artifacts/*"
