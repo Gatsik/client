@@ -167,6 +167,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         self.reactor.socket_error.connect(self.reconnector.reconnect)
 
         self._history_asked: set[str] = set()
+        self._pending_names: dict[str, list[ChatterInfo]] = {}
 
         self._keepalive_timer = QTimer()
         self._keepalive_timer.setInterval(30 * 1000)
@@ -331,7 +332,6 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         self._nickserv_identify()
 
     def on_namreply(self, c: ServerConnection, e: Event) -> None:
-        channel = ChannelID(ChannelType.PUBLIC, e.arguments[1])
         listing = e.arguments[2].split()
 
         def userdata(data):
@@ -340,8 +340,14 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
             hostname = ''
             return ChatterInfo(name, hostname, elevation)
 
-        chatters = [userdata(user) for user in listing]
-        self.new_channel_chatters.emit(channel, chatters)
+        pending = self._pending_names.setdefault(e.arguments[1], [])
+        pending.extend(userdata(user) for user in listing)
+
+    def on_endofnames(self, c: ServerConnection, e: Event) -> None:
+        chatters = self._pending_names.pop(e.arguments[0], [])
+        if chatters:
+            channel = ChannelID(ChannelType.PUBLIC, e.arguments[0])
+            self.new_channel_chatters.emit(channel, chatters)
 
     def on_whoisuser(self, c: ServerConnection, e: Event) -> None:
         self._log_event(e)
@@ -514,6 +520,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
     def on_disconnect(self, c: ServerConnection, e: Event) -> None:
         self._connected = False
         self._keepalive_timer.stop()
+        self._pending_names.clear()
         self.disconnected.emit()
         message = e.arguments[0]
         logger.info("Disconnected from chat: %s", message)

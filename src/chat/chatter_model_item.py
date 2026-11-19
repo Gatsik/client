@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import cached_property
 from typing import Any
 from typing import Self
 from urllib import parse
@@ -45,11 +46,6 @@ class ChatterModelItem(QtListModelItem):
         self._chatter_rel = self._relation.chatters[self.chatter.id_key]
         self._chatter_rel.updated.connect(self._updated)
 
-        self._map_request = DownloadRequest()
-        self._map_request.done.connect(self._updated)
-        self._avatar_request = DownloadRequest()
-        self._avatar_request.done.connect(self._updated)
-
         self.player = self.chatter.player
 
     @classmethod
@@ -66,6 +62,14 @@ class ChatterModelItem(QtListModelItem):
 
     def _updated(self):
         self.updated.emit(self)
+
+    def _new_request(self) -> DownloadRequest:
+        request = DownloadRequest()
+        request.done.connect(self._updated)
+        return request
+
+    _map_request = cached_property(_new_request)
+    _avatar_request = cached_property(_new_request)
 
     @property
     def chatter(self) -> Chatter:
@@ -146,7 +150,8 @@ class ChatterModelItem(QtListModelItem):
         return self.game.mapname.lower()
 
     def _download_avatar_if_needed(self) -> None:
-        self._avatar_dler.download_if_needed(self.avatar_url(), self._avatar_request)
+        if (url := self.avatar_url()) is not None:
+            self._avatar_dler.download_if_needed(url, self._avatar_request)
 
     def avatar_url(self) -> str | None:
         if self.player is None or self.player.avatar is None:

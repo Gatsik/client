@@ -19,12 +19,13 @@ from src.chat.channel_widget import ChannelWidget
 from src.chat.chat_controller import ChatController
 from src.chat.chatter_menu import ChatterMenu
 from src.chat.chatter_model import ChatterEventFilter
+from src.chat.chatter_model import ChatterFilterModel
 from src.chat.chatter_model import ChatterFormat
 from src.chat.chatter_model import ChatterItemDelegate
 from src.chat.chatter_model import ChatterLayout
 from src.chat.chatter_model import ChatterLayoutElements
 from src.chat.chatter_model import ChatterModel
-from src.chat.chatter_model import ChatterSortFilterModel
+from src.chat.chatter_model import ChatterSorter
 from src.client.playercolors import PlayerColors
 from src.client.user import User
 from src.client.user import UserRelations
@@ -427,7 +428,7 @@ class ChattersView:
         widget: ChannelWidget,
         chatter_layout: ChatterLayout,
         delegate: ChatterItemDelegate,
-        model: ChatterSortFilterModel,
+        model: ChatterFilterModel,
         controller: ChatController,
         event_filter: ChatterEventFilter,
         double_click_handler: ChatterDoubleClickHandler,
@@ -466,12 +467,11 @@ class ChattersView:
         user_relations: UserRelations,
         **kwargs: Any,
     ) -> Self:
+        sorter = ChatterSorter.build(user_relations=user_relations.model, **kwargs)
         model = ChatterModel.build(
-            channel, relation_trackers=user_relations.trackers, **kwargs,
+            channel, sorter=sorter, relation_trackers=user_relations.trackers, **kwargs,
         )
-        sort_filter_model = ChatterSortFilterModel.build(
-            model, user_relations=user_relations.model, **kwargs,
-        )
+        filter_model = ChatterFilterModel.build(model, **kwargs)
 
         chatter_layout = ChatterLayout.build(**kwargs)
         chatter_menu = ChatterMenu.build(**kwargs)
@@ -483,7 +483,7 @@ class ChattersView:
         view_parameters = ChattersViewParameters.build(**kwargs)
 
         return cls(
-            widget, chatter_layout, delegate, sort_filter_model,
+            widget, chatter_layout, delegate, filter_model,
             controller, event_filter, double_click_handler, view_parameters,
         )
 

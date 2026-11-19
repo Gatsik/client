@@ -1,4 +1,7 @@
+from bisect import bisect_left
 from collections.abc import Callable
+from collections.abc import Hashable
+from collections.abc import Iterable
 from enum import Enum
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -8,12 +11,14 @@ from typing import Self
 from PyQt6 import QtCore
 from PyQt6 import QtGui
 from PyQt6 import QtWidgets
+from PyQt6.QtCore import QModelIndex
 from PyQt6.QtCore import QObject
 from PyQt6.QtCore import QPoint
 from PyQt6.QtCore import QRect
 from PyQt6.QtCore import QSize
 from PyQt6.QtCore import QSortFilterProxyModel
 from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtGui import QIcon
@@ -43,38 +48,127 @@ if TYPE_CHECKING:
 
 
 class ChatterModel(QtListModel[ChannelChatter, ChatterModelItem]):
+    """
+    Keeps rows sorted, so that the filter model on top doesn't have to:
+    sorting there makes every filter change re-sort all the matching rows
+    """
+
+    # above this many chatters added at once, the model is reset instead
+    MAX_SINGLE_INSERTS = 100
+
     def __init__(
         self,
         channel: Channel,
         item_builder: Callable[[ChannelChatter], ChatterModelItem],
+        sorter: ChatterSorter,
     ) -> None:
         super().__init__(item_builder)
         self._channel = channel
+        self._sorter = sorter
+        self._sorter.changed.connect(self._resort)
+        self._keys: dict[ChatterModelItem, ChatterSortKey] = {}
+
+        self._pending: dict[Hashable, ChannelChatter] = {}
+        self._pending_timer = QTimer(self, singleShot=True, timeout=self._add_pending)
 
         self._channel.added_chatter.connect(self.add_chatter)
         self._channel.removed_chatter.connect(self.remove_chatter)
 
-        for chatter in self._channel.chatters:
-            self.add_chatter(chatter)
+        self._add_items(self._channel.chatters.values())
 
     @classmethod
-    def build(cls, channel: Channel, **kwargs: Any) -> Self:
+    def build(cls, channel: Channel, sorter: ChatterSorter, **kwargs: Any) -> Self:
         builder = ChatterModelItem.builder(**kwargs)
-        return cls(channel, builder)
+        return cls(channel, builder, sorter)
 
     def add_chatter(self, chatter: ChannelChatter) -> None:
-        self._add_item(chatter, chatter.id_key)
+        self._pending[chatter.id_key] = chatter
+        self._pending_timer.start()
+
+    def _add_pending(self) -> None:
+        pending, self._pending = self._pending, {}
+        self._add_items(pending.values())
 
     def remove_chatter(self, chatter: ChannelChatter) -> None:
-        self._remove_item(chatter.id_key)
+        if self._pending.pop(chatter.id_key, None) is None:
+            self._remove_item(chatter.id_key)
 
     def clear_chatters(self) -> None:
+        self._pending.clear()
         self._clear_items()
 
     def invalidate_items(self) -> None:
         start = self.index(0)
         end = self.index(len(self._itemlist) - 1)
         self.dataChanged.emit(start, end)
+
+    def _row(self, item: ChatterModelItem) -> int:
+        return bisect_left(self._itemlist, self._keys[item], key=self._keys.__getitem__)
+
+    def _add_items(self, chatters: Iterable[ChannelChatter]) -> None:
+        new = []
+        for cc in chatters:
+            assert cc.id_key not in self._items
+            item = self._item_builder(cc)
+            item.updated.connect(self._at_item_updated)
+            self._items[cc.id_key] = item
+            self._keys[item] = self._sorter.key(item)
+            new.append(item)
+        if not new:
+            return
+        if not self._itemlist or len(new) > self.MAX_SINGLE_INSERTS:
+            self.beginResetModel()
+            self._itemlist = sorted(self._itemlist + new, key=self._keys.__getitem__)
+            self.endResetModel()
+        else:
+            for item in new:
+                self._insert_row(item)
+
+    def _insert_row(self, item: ChatterModelItem) -> None:
+        row = self._row(item)
+        self.beginInsertRows(QModelIndex(), row, row)
+        self._itemlist.insert(row, item)
+        self.endInsertRows()
+
+    def _take_row(self, row: int) -> None:
+        self.beginRemoveRows(QModelIndex(), row, row)
+        del self._itemlist[row]
+        self.endRemoveRows()
+
+    def _remove_item(self, id_: Hashable) -> None:
+        item = self._items.pop(id_)
+        item.updated.disconnect(self._at_item_updated)
+        self._take_row(self._row(item))
+        del self._keys[item]
+
+    def _clear_items(self) -> None:
+        if self._itemlist:
+            super()._clear_items()
+        self._keys.clear()
+
+    def _at_item_updated(self, item: ChatterModelItem) -> None:
+        if item not in self._keys:
+            return
+        row = self._row(item)
+        key = self._keys[item] = self._sorter.key(item)
+        items = self._itemlist
+        if (
+            (row > 0 and key < self._keys[items[row - 1]])
+            or (row + 1 < len(items) and self._keys[items[row + 1]] < key)
+        ):
+            # remove and insert rather than move, which the filter model
+            # handles as a layout change and re-filters every row
+            self._take_row(row)
+            self._insert_row(item)
+        else:
+            index = self.index(row, 0)
+            self.dataChanged.emit(index, index)
+
+    def _resort(self) -> None:
+        self.beginResetModel()
+        self._keys = {item: self._sorter.key(item) for item in self._itemlist}
+        self._itemlist.sort(key=self._keys.__getitem__)
+        self.endResetModel()
 
 
 class ChatterRank(IntEnum):
@@ -88,61 +182,38 @@ class ChatterRank(IntEnum):
     FOE = 6
 
 
-class ChatterSortFilterModel(QSortFilterProxyModel):
+type ChatterSortKey = tuple[bool, ChatterRank, str, str]
+
+
+class ChatterSorter(QObject):
+    changed = pyqtSignal()
+
     def __init__(
         self,
-        model: ChatterModel,
         me: User,
         user_relations: UserRelationModel,
         chat_config: ChatConfig,
     ) -> None:
-        QSortFilterProxyModel.__init__(self)
+        super().__init__()
         self._me = me
         self._user_relations = user_relations
         self._chat_config = chat_config
         self._chat_config.updated.connect(self._check_sort_changed)
-        self.setSourceModel(model)
-        self.sort(0)
+        self._me.clan_changed.connect(self.changed)
 
     @classmethod
     def build(
         cls,
-        model: ChatterModel,
         me: User,
         user_relations: UserRelationModel,
         chat_config: ChatConfig,
         **kwargs: Any,
     ) -> Self:
-        return cls(model, me, user_relations, chat_config)
+        return cls(me, user_relations, chat_config)
 
-    def lessThan(self, leftIndex, rightIndex):
-        source = self.sourceModel()
-        left = source.data(leftIndex, Qt.ItemDataRole.DisplayRole)
-        right = source.data(rightIndex, Qt.ItemDataRole.DisplayRole)
-
-        comp_list = [self._lt_me, self._lt_rank, self._lt_alphabetical]
-        for lt in comp_list:
-            if lt(left, right):
-                return True
-            elif lt(right, left):
-                return False
-        return False
-
-    def _lt_me(self, left, right):
-        if self._me.login is None:
-            return False
-        return (
-            left.chatter.name == self._me.login
-            and right.chatter.name != self._me.login
-        )
-
-    def _lt_rank(self, left, right):
-        left_rank = self._get_user_rank(left)
-        right_rank = self._get_user_rank(right)
-        return left_rank < right_rank
-
-    def _lt_alphabetical(self, left, right):
-        return left.chatter.name.lower() < right.chatter.name.lower()
+    def key(self, item: ChatterModelItem) -> ChatterSortKey:
+        name = item.chatter.name
+        return (name != self._me.login, self._get_user_rank(item), name.lower(), name)
 
     def _get_user_rank(self, item):
         pid = item.player.id if item.player is not None else None
@@ -164,6 +235,20 @@ class ChatterSortFilterModel(QSortFilterProxyModel):
             return ChatterRank.USER
         return ChatterRank.NONPLAYER
 
+    def _check_sort_changed(self, option):
+        if option == "friendsontop":
+            self.changed.emit()
+
+
+class ChatterFilterModel(QSortFilterProxyModel):
+    def __init__(self, model: ChatterModel) -> None:
+        QSortFilterProxyModel.__init__(self)
+        self.setSourceModel(model)
+
+    @classmethod
+    def build(cls, model: ChatterModel, **kwargs: Any) -> Self:
+        return cls(model)
+
     def filterAcceptsRow(self, row: int, parent: QtCore.QModelIndex) -> bool:
         source = self.sourceModel()
         index = source.index(row, 0, parent)
@@ -172,10 +257,6 @@ class ChatterSortFilterModel(QSortFilterProxyModel):
         data = source.data(index, Qt.ItemDataRole.DisplayRole)
         displayed_name = ChatterFormat.chatter_name(data.chatter)
         return self.filterRegularExpression().match(displayed_name).hasMatch()
-
-    def _check_sort_changed(self, option):
-        if option == "friendsontop":
-            self.invalidate()
 
     def invalidate_items(self):
         self.sourceModel().invalidate_items()
