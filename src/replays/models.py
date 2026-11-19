@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from pydantic import BaseModel
@@ -12,6 +10,7 @@ from src.api.models.Player import Player
 from src.model.rating import Rating
 from src.qt.models.qtlistmodel import QtListModel
 from src.qt.models.qtlistmodel import QtListModelItem
+from src.user_notes.notes import UserNotes
 
 
 # FIXME - this is what the widget uses so far, we should define this
@@ -29,10 +28,16 @@ class MetadataModel(BaseModel):
 
 
 class ScoreboardModelItem(QtListModelItem):
-    def __init__(self, replay_data: dict, mod: str | None) -> None:
+    def __init__(
+        self,
+        replay_data: dict,
+        mod: str | None,
+        user_notes: UserNotes | None = None,
+    ) -> None:
         super().__init__()
         self.replay_data = replay_data
         self.mod = mod or ""
+        self._user_notes = user_notes
         self.player = Player(**replay_data["player"])
         if len(self.replay_data["ratingChanges"]) > 0:
             self.rating_stats = self.replay_data["ratingChanges"][0]
@@ -40,10 +45,22 @@ class ScoreboardModelItem(QtListModelItem):
             self.rating_stats = None
 
     @classmethod
-    def builder(cls, mod: str | None) -> Callable[[dict], ScoreboardModelItem]:
+    def builder(
+        cls,
+        mod: str | None,
+        user_notes: UserNotes | None = None,
+    ) -> Callable[[dict], ScoreboardModelItem]:
         def build(data: dict) -> ScoreboardModelItem:
-            return cls(data, mod)
+            return cls(data, mod, user_notes)
         return build
+
+    def player_id(self) -> int:
+        return int(self.player.xd)
+
+    def note(self) -> str | None:
+        if self._user_notes is None:
+            return None
+        return self._user_notes.get(self.player_id())
 
     def score(self) -> int:
         return self.replay_data["score"]
@@ -123,8 +140,8 @@ class ScoreboardModelItem(QtListModelItem):
     def icon(self) -> QIcon:
         return util.THEME.icon(f"replays/{self.faction_name()}.png")
 
-    def tooltip(self) -> None:
-        ...
+    def tooltip(self) -> str | None:
+        return self.note()
 
 
 class ScoreboardModel(QtListModel[dict, ScoreboardModelItem]):

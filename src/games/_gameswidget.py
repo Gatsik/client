@@ -145,6 +145,7 @@ class GamesWidget(FormClass, BaseClass):
             self.client.player_colors,
             self.client.player_ctx_menu,
             self.client.user_relations,
+            self.client.user_notes,
         )
 
         self.gamePanelStack.addWidget(placeholder)

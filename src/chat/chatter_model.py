@@ -34,6 +34,8 @@ from src.model.game import GameState
 from src.model.rating import RatingType
 from src.qt.itemviews.styleditemdelegate import StyledItemDelegate
 from src.qt.models.qtlistmodel import QtListModel
+from src.user_notes.dialogs import note_icon
+from src.user_notes.notes import UserNotes
 from src.util.theme import ThemeSet
 
 if TYPE_CHECKING:
@@ -200,20 +202,35 @@ class ChatterItemFormatter:
         avatars: CachedImageDownloader,
         player_colors: PlayerColors,
         info_hider: SensitiveMapInfoChecker,
+        user_notes: UserNotes[int] | None = None,
+        irc_user_notes: UserNotes[str] | None = None,
     ) -> None:
         self._avatars = avatars
         self._player_colors = player_colors
         self._info_hider = info_hider
+        self._user_notes = user_notes
+        self._irc_user_notes = irc_user_notes
 
     @classmethod
     def build(
         cls,
         avatar_dler: CachedImageDownloader,
         player_colors: PlayerColors,
+        user_notes: UserNotes[int] | None = None,
+        irc_user_notes: UserNotes[str] | None = None,
         **kwargs: Any,
     ) -> Self:
         info_hider = SensitiveMapInfoChecker.build(**kwargs)
-        return cls(avatar_dler, player_colors, info_hider)
+        return cls(avatar_dler, player_colors, info_hider, user_notes, irc_user_notes)
+
+    def note(self, data: ChatterModelItem) -> str | None:
+        if data.player is not None:
+            if self._user_notes is None:
+                return None
+            return self._user_notes.get(data.player.id)
+        if self._irc_user_notes is None:
+            return None
+        return self._irc_user_notes.get(data.chatter.name)
 
     def map_icon(self, data):
         game = data.game
@@ -411,6 +428,7 @@ class ChatterItemDelegate(StyledItemDelegate):
             Elems.RANK: self._draw_rank,
             Elems.AVATAR: self._draw_avatar,
             Elems.COUNTRY: self._draw_country,
+            Elems.NOTE: self._draw_note,
         }
         for item in self.layout.visible_items():
             draw[item](painter, data)
@@ -470,6 +488,11 @@ class ChatterItemDelegate(StyledItemDelegate):
         icon = util.THEME.icon(f"chat/countries/{country.lower()}.png")
         self._draw_icon(painter, icon, ChatterLayoutElements.COUNTRY)
 
+    def _draw_note(self, painter: QtGui.QPainter, data: ChatterModelItem) -> None:
+        if self._formatter.note(data) is None:
+            return
+        self._draw_icon(painter, note_icon(), ChatterLayoutElements.NOTE)
+
     def _draw_icon(self, painter, icon, element):
         rect = self.layout.sizes[element]
         icon.paint(painter, rect, QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -495,6 +518,8 @@ class ChatterItemDelegate(StyledItemDelegate):
             return self._formatter.country_tooltip(data)
         elif item == ChatterLayoutElements.NICK:
             return self._formatter.nick_tooltip(data)
+        elif item == ChatterLayoutElements.NOTE:
+            return self._formatter.note(data)
 
 
 class ChatterLayoutElements(Enum):
@@ -504,6 +529,7 @@ class ChatterLayoutElements(Enum):
     MAP = "mapBox"
     COUNTRY = "countryBox"
     NICK = "nickBox"
+    NOTE = "noteBox"
 
 
 class ChatterLayout(QObject):

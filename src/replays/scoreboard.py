@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Iterable
 from enum import Enum
 from typing import cast
@@ -19,6 +17,7 @@ from src.replays.models import ScoreboardModel
 from src.replays.models import ScoreboardModelItem
 from src.replays.scoreboarditemdelegate import ScoreboardItemDelegate
 from src.replays.scoreboardlistview import ScoreboardListView
+from src.user_notes.notes import UserNotes
 
 
 class GameResult(Enum):
@@ -44,8 +43,13 @@ class Scoreboard(QWidget):
             teams: dict,
             player_menu_handler: PlayerContextMenu,
             game: Game,
+            user_notes: UserNotes | None = None,
     ) -> None:
         super().__init__()
+        self.user_notes = user_notes
+        self._team_views: list[QListView] = []
+        if self.user_notes is not None:
+            self.user_notes.updated.connect(self._at_notes_updated)
         self.winner = winner
         self.spoiled = spoiled
         self.duration = duration or ""
@@ -113,7 +117,9 @@ class Scoreboard(QWidget):
         team_layout = QVBoxLayout()
         self.add_result_label(team_result.value, team_layout)
 
-        model = ScoreboardModel(self.spoiled, alignment, ScoreboardModelItem.builder(self.mod))
+        model = ScoreboardModel(
+            self.spoiled, alignment, ScoreboardModelItem.builder(self.mod, self.user_notes),
+        )
         for player in players:
             model.add_player(player)
 
@@ -122,12 +128,18 @@ class Scoreboard(QWidget):
         team_view.setItemDelegate(ScoreboardItemDelegate())
         team_view.set_menu_handler(self.player_menu_handler)
         team_layout.addWidget(team_view)
+        self._team_views.append(team_view)
 
         view_height = self.teamview_height(team_view)
         self.adjust_teamview_height(team_view, view_height)
         self._team_heights.append(self.GAME_RESULT_RESERVED_HEIGHT + view_height)
 
         self.teams_layout.addLayout(team_layout)
+
+    def _at_notes_updated(self, player_id: int) -> None:
+        for view in self._team_views:
+            if (viewport := view.viewport()) is not None:
+                viewport.update()
 
     def add_team_score_if_needed(
             self,

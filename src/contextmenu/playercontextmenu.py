@@ -17,6 +17,8 @@ from src.model.game import GameState
 from src.model.player import Player
 from src.playercard.playerprofiledialog import PlayerProfileDialog
 from src.power import PowerTools
+from src.user_notes.dialogs import edit_user_note
+from src.user_notes.notes import UserNotes
 
 if TYPE_CHECKING:
     from src.client._clientwindow import ClientWindow
@@ -43,6 +45,9 @@ class PlayerMenuItem(Enum):
     INVITE_TO_PARTY = "Invite to party"
     KICK_FROM_PARTY = "Kick from party"
     VIEW_PROFILE = "View profile"
+    ADD_NOTE = "Add note"
+    EDIT_NOTE = "Edit note"
+    REMOVE_NOTE = "Remove note"
 
 
 class PlayerContextMenu:
@@ -77,6 +82,7 @@ class PlayerContextMenu:
         yield list(self.player_actions(player_id, is_me=is_me))
         yield list(self.friend_actions(player_id, login, is_me=is_me))
         yield list(self.ignore_actions(player_id, login, is_me=is_me))
+        yield list(self.note_actions(player_id, login))
         yield list(self.party_actions(player_id, is_me=is_me))
 
     def user_actions(self, player_id: int) -> Generator[PlayerMenuItem]:
@@ -157,6 +163,20 @@ class PlayerContextMenu:
         else:
             yield PlayerMenuItem.ADD_CHATTERBOX
 
+    def _note_target(self, player_id: int, login: str) -> tuple[UserNotes, int | str]:
+        # IRC-only users have no id, so their notes are keyed by nickname
+        if player_id == -1:
+            return self._client_window.irc_user_notes, login
+        return self._client_window.user_notes, player_id
+
+    def note_actions(self, player_id: int, login: str) -> Generator[PlayerMenuItem]:
+        notes, key = self._note_target(player_id, login)
+        if notes.has(key):
+            yield PlayerMenuItem.EDIT_NOTE
+            yield PlayerMenuItem.REMOVE_NOTE
+        else:
+            yield PlayerMenuItem.ADD_NOTE
+
     def party_actions(
             self,
             player_id: int,
@@ -229,6 +249,12 @@ class PlayerContextMenu:
             self._client_window.invite_to_party(player_id)
         elif kind == Items.KICK_FROM_PARTY:
             self._client_window.games.kickPlayerFromParty(player_id)
+        elif kind in [Items.ADD_NOTE, Items.EDIT_NOTE]:
+            notes, key = self._note_target(player_id, login)
+            edit_user_note(self._parent_widget, notes, key, login)
+        elif kind == Items.REMOVE_NOTE:
+            notes, key = self._note_target(player_id, login)
+            notes.remove(key)
 
     def _handle_game(self, player_id: int) -> None:
         online_player = self._get_online_player_by_id(player_id)

@@ -85,6 +85,11 @@
         <string>Data and Cache</string>
        </property>
       </item>
+      <item>
+       <property name="text">
+        <string>Import</string>
+       </property>
+      </item>
      </widget>
      <widget class="QStackedWidget" name="tabOption">
       <property name="currentIndex">
@@ -2007,6 +2012,134 @@ Folders with favourite maps remain untouched</string>
            </layout>
           </widget>
          </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="importPage">
+       <layout class="QVBoxLayout" name="importPageLayout">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QGroupBox" name="importSourceBox">
+          <property name="title">
+           <string>Import from another client</string>
+          </property>
+          <layout class="QFormLayout" name="importSourceLayout">
+           <item row="0" column="0">
+            <widget class="QLabel" name="labelImportSource">
+             <property name="text">
+              <string>Client:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QComboBox" name="comboImportSource"/>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="labelImportPath">
+             <property name="text">
+              <string>Settings file:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <layout class="QHBoxLayout" name="importPathLayout">
+             <item>
+              <widget class="QLineEdit" name="editImportPath">
+               <property name="placeholderText">
+                <string>Path to the client's settings file</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="buttonBrowseImportPath">
+               <property name="text">
+                <string>Browse</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="2" column="1">
+            <widget class="QLabel" name="labelImportStatus">
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="importDataBox">
+          <property name="title">
+           <string>Data to import</string>
+          </property>
+          <layout class="QVBoxLayout" name="importDataLayout">
+           <item>
+            <widget class="QLabel" name="labelImportHint">
+             <property name="font">
+              <font>
+               <italic>true</italic>
+              </font>
+             </property>
+             <property name="text">
+              <string>Imported data is applied immediately. If some of it differs from what you already have, you will be asked what to keep.</string>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="importUserNotesLayout">
+             <item>
+              <widget class="QPushButton" name="buttonImportUserNotes">
+               <property name="text">
+                <string>Import user notes</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="importUserNotesSpacer">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <spacer name="importPageSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
         </item>
        </layout>
       </widget>

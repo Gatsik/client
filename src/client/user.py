@@ -457,6 +457,10 @@ class RelationshipTracker[KT, VT: ModelItem](QObject):
         if item.id_key in self._trackers:
             del self._trackers[item.id_key]
 
+    def notify_updated(self, key: KT, /) -> None:
+        """Report a change of user data stored elsewhere (e.g. notes)"""
+        self._at_relation_updated(key)
+
     def _at_relation_updated(self, key: KT, /) -> None:
         tracker = self._trackers.get(key, None)
         if tracker is None:

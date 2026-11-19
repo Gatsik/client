@@ -2,11 +2,14 @@ from typing import cast
 
 from PyQt6.QtCore import QEvent
 from PyQt6.QtCore import QMetaObject
+from PyQt6.QtCore import QModelIndex
 from PyQt6.QtCore import QObject
+from PyQt6.QtCore import QRect
 from PyQt6.QtCore import Qt
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtGui import QContextMenuEvent
+from PyQt6.QtGui import QPainter
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QFormLayout
 from PyQt6.QtWidgets import QGroupBox
@@ -15,6 +18,9 @@ from PyQt6.QtWidgets import QLabel
 from PyQt6.QtWidgets import QListWidget
 from PyQt6.QtWidgets import QListWidgetItem
 from PyQt6.QtWidgets import QPushButton
+from PyQt6.QtWidgets import QStyle
+from PyQt6.QtWidgets import QStyledItemDelegate
+from PyQt6.QtWidgets import QStyleOptionViewItem
 from PyQt6.QtWidgets import QVBoxLayout
 from PyQt6.QtWidgets import QWidget
 
@@ -32,6 +38,8 @@ from src.model.game import Game
 from src.model.game import GameState
 from src.model.player import Player
 from src.qt.widgets.clickablelabel import ClickableLabel
+from src.user_notes.dialogs import note_icon
+from src.user_notes.notes import UserNotes
 
 
 class TeamListEventFilter(QObject):
@@ -58,12 +66,48 @@ class TeamListEventFilter(QObject):
         menu.popup(event.globalPos())
 
 
+NOTE_ROLE = Qt.ItemDataRole.UserRole + 1
+
+
+class NoteIconItemDelegate(QStyledItemDelegate):
+    ICON_SIZE = 16
+    SPACING = 3
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        if not index.data(NOTE_ROLE):
+            super().paint(painter, option, index)
+            return
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        reserved = self.ICON_SIZE + self.SPACING * 2
+        opt.rect = QRect(opt.rect.adjusted(0, 0, -reserved, 0))
+        style = opt.widget.style() if opt.widget is not None else None
+        if style is None:
+            super().paint(painter, option, index)
+            return
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+
+        text_rect = style.subElementRect(QStyle.SubElement.SE_ItemViewItemText, opt, opt.widget)
+        elided = opt.fontMetrics.elidedText(opt.text, opt.textElideMode, text_rect.width())
+        text_width = min(opt.fontMetrics.horizontalAdvance(elided), text_rect.width())
+        size = min(self.ICON_SIZE, option.rect.height())
+        icon_rect = QRect(
+            text_rect.left() + text_width + self.SPACING,
+            option.rect.top() + (option.rect.height() - size) // 2,
+            size,
+            size,
+        )
+        note_icon().paint(painter, icon_rect, Qt.AlignmentFlag.AlignCenter)
+
+
 class TeamWidgetUI:
     def setupUi(self, widget: QWidget) -> None:
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         self.teamList = QListWidget()
         self.teamList.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.teamList.setItemDelegate(NoteIconItemDelegate(self.teamList))
         self.teamLabel = QLabel()
         self.numPlayersLabel = QLabel()
         self.teamRating = QLabel()
@@ -92,7 +136,7 @@ class TeamWidget(QWidget):
     def set_num_players(self, num: int) -> None:
         self.ui.numPlayersLabel.setText(f"({num})")
 
-    def add_player(self, player: Player, color: QColor) -> None:
+    def add_player(self, player: Player, color: QColor, note: str | None = None) -> None:
         clan_tag = f"[{player.clan}]" if player.clan is not None else ""
         player_item = QListWidgetItem(f"{clan_tag}{player.login} ({player.rating_estimate()})")
         if player.country is not None:
@@ -100,6 +144,9 @@ class TeamWidget(QWidget):
             player_item.setIcon(country_icon)
         player_item.setData(Qt.ItemDataRole.UserRole, player)
         player_item.setForeground(color)
+        if note:
+            player_item.setData(NOTE_ROLE, note)
+            player_item.setToolTip(note)
         self.ui.teamList.addItem(player_item)
 
     def clear(self) -> None:
@@ -190,12 +237,15 @@ class GamePanelWidget(QWidget):
         player_colors: PlayerColors,
         ctx_menu: PlayerContextMenu,
         user_relations: UserRelations,
+        user_notes: UserNotes,
     ) -> None:
         super().__init__(parent)
         self.player_colors = player_colors
         self.event_filter = TeamListEventFilter(ctx_menu)
         self.user_relations = user_relations
         self.user_relations.trackers.players.updated.connect(self.refresh_ui)
+        self.user_notes = user_notes
+        self.user_notes.updated.connect(self.refresh_ui)
         self._mapgen_manager = mapgen_manager
         self.ui = GamePanelUI()
         self.ui.setupUi(self)
@@ -310,7 +360,7 @@ class GamePanelWidget(QWidget):
                     color = QColor(self.player_colors.get_color("game_host"))
                 else:
                     color = QColor(self.player_colors.get_user_color(player.id))
-                team_widget.add_player(player, color)
+                team_widget.add_player(player, color, self.user_notes.get(player.id))
                 total_rating += player.rating_estimate()
 
             average_rating = total_rating / len(logins) if len(logins) > 0 else 0
@@ -326,7 +376,7 @@ class GamePanelWidget(QWidget):
                 if player is None:
                     continue
                 color = QColor(self.player_colors.get_user_color(player.id))
-                observers_widget.add_player(player, color)
+                observers_widget.add_player(player, color, self.user_notes.get(player.id))
             observers_widget.set_num_players(len(observers))
             observers_widget.show()
         else:

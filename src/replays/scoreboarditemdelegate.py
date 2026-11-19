@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from PyQt6.QtCore import QModelIndex
 from PyQt6.QtCore import QRect
 from PyQt6.QtCore import QSize
@@ -13,9 +11,13 @@ from src.qt.itemviews.styleditemdelegate import StyledItemDelegate
 from src.qt.utils import qpainter
 from src.replays.models import ScoreboardModel
 from src.replays.models import ScoreboardModelItem
+from src.user_notes.dialogs import note_icon
 
 
 class ScoreboardItemDelegate(StyledItemDelegate):
+    NOTE_ICON_SIZE = 16
+    NOTE_ICON_SPACING = 3
+
     def __init__(self) -> None:
         StyledItemDelegate.__init__(self)
         self._row_height = 22
@@ -68,9 +70,35 @@ class ScoreboardItemDelegate(StyledItemDelegate):
         rating = player_data.rating()
         rating_str = f"{rating}" if rating is not None else "???"
         text = f"{player_data.login()} ({rating_str})"
-        elided = self._get_elided_text(painter, text, width=rect.width())
+        has_note = player_data.note() is not None
+        icon_size = min(self.NOTE_ICON_SIZE, rect.height())
+        text_width = rect.width()
+        if has_note:
+            text_width -= icon_size + self.NOTE_ICON_SPACING
+        elided = self._get_elided_text(painter, text, width=text_width)
         painter.drawText(rect, alignment, elided)
+        if has_note:
+            self._draw_note_icon(painter, rect, elided, icon_size, alignment)
         return rect
+
+    def _draw_note_icon(
+        self,
+        painter: QPainter,
+        rect: QRect,
+        text: str,
+        icon_size: int,
+        alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft,
+    ) -> None:
+        advance = painter.fontMetrics().horizontalAdvance(text) + self.NOTE_ICON_SPACING
+        if alignment == Qt.AlignmentFlag.AlignRight:
+            left = rect.right() - advance - icon_size + 1
+        else:
+            left = rect.left() + advance
+        # text is top-aligned
+        text_height = painter.fontMetrics().height()
+        top = rect.top() + max(0, (text_height - icon_size) // 2)
+        icon_rect = QRect(left, top, icon_size, icon_size)
+        note_icon().paint(painter, icon_rect, Qt.AlignmentFlag.AlignCenter)
 
     def _draw_rating_change(
             self,

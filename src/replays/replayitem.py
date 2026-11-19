@@ -410,7 +410,7 @@ class ReplayItem(QtWidgets.QTreeWidgetItem):
         scoreboard = Scoreboard(
             self.mod, self.winner, self.spoiled,
             self.duration, self.teamWin, self.uid, self.teams,
-            self.client.player_ctx_menu, self.game,
+            self.client.player_ctx_menu, self.game, self.client.user_notes,
         )
         scoreboard.setup()
         return scoreboard

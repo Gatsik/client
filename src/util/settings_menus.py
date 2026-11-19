@@ -1,5 +1,6 @@
 import logging
 import time
+from collections.abc import Sequence
 from enum import IntEnum
 from operator import itemgetter
 
@@ -23,6 +24,8 @@ from src import util
 from src.chat.channel_view import ChatLineCssTemplate
 from src.chat.chatter_model import ChatterLayoutElements
 from src.chat.language_channel_config import LanguageChannelConfig
+from src.client_import.importer import DataImporter
+from src.client_import.page import ClientImportPage
 from src.config import Settings
 from src.connectivity.IceAdapterProcess import IceAdapterProcess
 from src.fa.path import validate_game_path
@@ -43,8 +46,14 @@ class OptionsDialog(FormClass, BaseClass):
         NOTIFICATIONS = 3
         ICE_ADAPTER = 4
         CACHE = 5
+        IMPORT = 6
 
-    def __init__(self, parent: QWidget | None, update_tools: ClientUpdateTools) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None,
+        update_tools: ClientUpdateTools,
+        data_importers: Sequence[DataImporter] = (),
+    ) -> None:
         BaseClass.__init__(self, parent)
         self.setModal(True)
         self.setupUi(self)
@@ -68,6 +77,16 @@ class OptionsDialog(FormClass, BaseClass):
             "Use pipe to stream live replay data. Avoids Premature EOF errors,\n"
             "but the replay will end abruptly with no ability to select armies/see\n"
             "statistics/etc.",
+        )
+
+        self.import_page = ClientImportPage(
+            source_combo=self.comboImportSource,
+            path_edit=self.editImportPath,
+            browse_button=self.buttonBrowseImportPath,
+            status_label=self.labelImportStatus,
+            import_buttons={"user_notes": self.buttonImportUserNotes},
+            importers=data_importers,
+            parent_widget=self,
         )
 
         self.tabSelection.currentRowChanged.connect(self.change_tab)

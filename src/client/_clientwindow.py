@@ -88,6 +88,8 @@ from src.ui.busy_widget import BusyWidget
 from src.ui.status_logo import StatusLogo
 from src.unitdb.unitdbtab import UnitDBTab
 from src.updater import ClientUpdateTools
+from src.user_notes.dialogs import UserNotesImporter
+from src.user_notes.notes import UserNotes
 from src.util import crash
 from src.util.gameurl import GameUrl
 from src.util.settings_menus import OptionsDialog
@@ -248,6 +250,11 @@ class ClientWindow(FormClass, BaseClass):
             relation_model, relation_controller, relation_trackers,
         )
 
+        self.user_notes = UserNotes.for_players(config.Settings)
+        self.user_notes.updated.connect(relation_trackers.players.notify_updated)
+        self.irc_user_notes = UserNotes.for_irc_users(config.Settings)
+        self.irc_user_notes.updated.connect(relation_trackers.chatters.notify_updated)
+
         self.map_preview_downloader = MapSmallPreviewDownloader()
         self.avatar_downloader = CachedImageDownloader()
 
@@ -389,7 +396,11 @@ class ClientWindow(FormClass, BaseClass):
         )
         self._update_tools.mandatory_update_aborted.connect(self.close)
 
-        self.options = OptionsDialog(self, self._update_tools)
+        self.options = OptionsDialog(
+            self,
+            self._update_tools,
+            data_importers=[UserNotesImporter(self.user_notes, self._player_login_by_id)],
+        )
         config.Settings.changed.connect(self.update_options)
 
         # Initialize the Menu Bar according to settings etc.
@@ -763,6 +774,8 @@ class ClientWindow(FormClass, BaseClass):
             alias_viewer=self._alias_viewer,
             client_window=self,
             game_runner=self._game_runner,
+            user_notes=self.user_notes,
+            irc_user_notes=self.irc_user_notes,
         )
 
         channel_autojoiner = ChannelAutojoiner.build(
@@ -1084,6 +1097,10 @@ class ClientWindow(FormClass, BaseClass):
         self.actionShowClientConfigFile.triggered.connect(util.showConfigFile)
         self.actionSettings.triggered.connect(self.options.show)
         self.actionCheckPlayerAliases.triggered.connect(self.checkPlayerAliases)
+
+    def _player_login_by_id(self, player_id: int) -> str | None:
+        player = self.players.get(player_id)
+        return None if player is None else player.login
 
     @QtCore.pyqtSlot()
     def update_options(self) -> None:
