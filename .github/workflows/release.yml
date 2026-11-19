@@ -11,7 +11,7 @@ env:
   ICE_ADAPTER_VERSION: 3.3.12
   BUILD_VERSION: ${{ github.event.inputs.version }}
   PYTHON_VERSION: 3.15
-  ZIG_VERSION: 0.17.0
+  ZIG_VERSION: 0.17.1
   JAVA_DISTRIBUTION: "oracle"
   JAVA_VERSION: 25
 
