@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from enum import Enum
 from typing import Any
 from typing import Self
@@ -265,7 +263,7 @@ class ChatController(QObject):
 
     def _at_config_updated(self, option):
         if option == "max_chat_lines":
-            for channel in self._channels.values:
+            for channel in self._channels.values():
                 self._trim_channel_lines(channel)
 
     def _trim_channel_lines(self, channel):
