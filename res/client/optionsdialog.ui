@@ -1075,36 +1075,60 @@
                 </layout>
                </item>
                <item>
-                <widget class="QCheckBox" name="checkAutoDownloadMods">
-                 <property name="text">
-                  <string>Automatic Downloading of Mods</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QCheckBox" name="checkAutoDownloadMaps">
-                 <property name="text">
-                  <string>Automatic Downloading of Maps</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QCheckBox" name="checkAutoGenerateMaps">
-                 <property name="text">
-                  <string>Automatic Generating of Maps</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QCheckBox" name="checkAutoDeleteGeneratedMaps">
-                 <property name="toolTip">
-                  <string>Removes map folders whose names match generated maps pattern
+                <layout class="QGridLayout" name="vaultsCheckboxesGrid">
+                 <item row="0" column="0">
+                  <widget class="QCheckBox" name="checkAutoDownloadMods">
+                   <property name="text">
+                    <string>Automatic Downloading of Mods</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QCheckBox" name="checkAutoDownloadMaps">
+                   <property name="text">
+                    <string>Automatic Downloading of Maps</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QCheckBox" name="checkAutoUpdateMods">
+                   <property name="toolTip">
+                    <string>Before hosting a game, download the latest vault versions of the selected mods</string>
+                   </property>
+                   <property name="text">
+                    <string>Automatic Updating of Mods</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="1">
+                  <widget class="QCheckBox" name="checkAutoUpdateMap">
+                   <property name="toolTip">
+                    <string>Before hosting a game, download the latest vault version of the selected map</string>
+                   </property>
+                   <property name="text">
+                    <string>Automatic Updating of Map</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="0">
+                  <widget class="QCheckBox" name="checkAutoGenerateMaps">
+                   <property name="text">
+                    <string>Automatic Generating of Maps</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QCheckBox" name="checkAutoDeleteGeneratedMaps">
+                   <property name="toolTip">
+                    <string>Removes map folders whose names match generated maps pattern
 Folders with favourite maps remain untouched</string>
-                 </property>
-                 <property name="text">
-                  <string>Delete Generated Maps on Exit</string>
-                 </property>
-                </widget>
+                   </property>
+                   <property name="text">
+                    <string>Delete Generated Maps on Exit</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
                </item>
               </layout>
              </widget>
@@ -2216,6 +2240,8 @@ Folders with favourite maps remain untouched</string>
   <tabstop>buttonBrowseVault</tabstop>
   <tabstop>checkAutoDownloadMods</tabstop>
   <tabstop>checkAutoDownloadMaps</tabstop>
+  <tabstop>checkAutoUpdateMods</tabstop>
+  <tabstop>checkAutoUpdateMap</tabstop>
   <tabstop>checkAutoGenerateMaps</tabstop>
   <tabstop>checkAutoDeleteGeneratedMaps</tabstop>
   <tabstop>scrollArea_6</tabstop>

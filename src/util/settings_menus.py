@@ -264,6 +264,8 @@ class OptionsDialog(FormClass, BaseClass):
         self.editVaultPath.textChanged.connect(self.enable_apply_button)
         self.checkAutoDownloadMods.toggled.connect(self.enable_apply_button)
         self.checkAutoDownloadMaps.toggled.connect(self.enable_apply_button)
+        self.checkAutoUpdateMods.toggled.connect(self.enable_apply_button)
+        self.checkAutoUpdateMap.toggled.connect(self.enable_apply_button)
         self.checkAutoGenerateMaps.toggled.connect(self.enable_apply_button)
         self.checkAutoDeleteGeneratedMaps.toggled.connect(self.enable_apply_button)
 
@@ -391,6 +393,8 @@ class OptionsDialog(FormClass, BaseClass):
 
         self.checkAutoDownloadMods.setChecked(Settings.get("mods/autodownload", False, type=bool))
         self.checkAutoDownloadMaps.setChecked(Settings.get("maps/autodownload", False, type=bool))
+        self.checkAutoUpdateMods.setChecked(Settings.get("mods/autoupdate", False, type=bool))
+        self.checkAutoUpdateMap.setChecked(Settings.get("maps/autoupdate", False, type=bool))
         self.checkAutoGenerateMaps.setChecked(
             Settings.get("mapGenerator/autostart", False, type=bool),
         )
@@ -518,6 +522,7 @@ class OptionsDialog(FormClass, BaseClass):
 
         with Settings.group("maps") as group:
             group.setValue("autodownload", self.checkAutoDownloadMaps.isChecked())
+            group.setValue("autoupdate", self.checkAutoUpdateMap.isChecked())
             group.setValue("autodelete_generated", self.checkAutoDeleteGeneratedMaps.isChecked())
 
         if text := self.editFAPath.text().strip():
@@ -525,6 +530,7 @@ class OptionsDialog(FormClass, BaseClass):
         if text := self.editVaultPath.text().strip():
             Settings.set("vault/custom_path", text)
         Settings.set("mods/autodownload", self.checkAutoDownloadMods.isChecked())
+        Settings.set("mods/autoupdate", self.checkAutoUpdateMods.isChecked())
         Settings.set("mapGenerator/autostart", self.checkAutoGenerateMaps.isChecked())
 
         if (vault_path := self.editVaultPath.text().strip()) and vault_path != util.VAULTS_BASE_DIR:

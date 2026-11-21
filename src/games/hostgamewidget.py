@@ -404,11 +404,6 @@ class HostGameWidget(QDialog):
         self.ui.titleEdit.setText(game.title)
         self.ui.passEdit.setText(self.password)
         self.ui.passCheck.setChecked(self.game.password_protected)
-        autoupdate_map = Settings.get("fa.games/autoupdate_map", False, type=bool)
-        self.ui.autoUpdateMapCheck.setChecked(autoupdate_map)
-        self.ui.autoUpdateMapCheck.setVisible(self.game.featured_mod != "coop")
-        autoupdate_mods = Settings.get("fa.games/autoupdate_mods", False, type=bool)
-        self.ui.autoUpdateModsCheck.setChecked(autoupdate_mods)
         self.ui.radioFriends.setChecked(self.game.visibility == GameVisibility.FRIENDS)
         self.ui.enforceRatingCheck.setChecked(self.game.enforce_rating_range)
         if self.game.rating_min is not None:
@@ -575,7 +570,7 @@ class HostGameWidget(QDialog):
                 rating_max=self.ui.ratingMaxSpinBox.value(),
             )
 
-        if self.game.featured_mod != "coop" and self.ui.autoUpdateMapCheck.isChecked():
+        if self.game.featured_mod != "coop" and Settings.get("maps/autoupdate", False, type=bool):
             mapname = maps.updateMapToLatest(self.game.mapname)
             if mapname != self.game.mapname:
                 map_info = maps.CachedMapsMetadata.get_map(mapname)
@@ -583,7 +578,7 @@ class HostGameWidget(QDialog):
                 self.game.update(mapname=mapname, max_players=max_players)
 
         mods = self.selected_mods()
-        if self.ui.autoUpdateModsCheck.isChecked():
+        if Settings.get("mods/autoupdate", False, type=bool):
             mods = updateModsToLatest(mods)
 
         self.save_last_hosted_settings()
@@ -608,8 +603,6 @@ class HostGameWidget(QDialog):
         util.settings.setValue("friends_only", self.ui.radioFriends.isChecked())
 
         util.settings.setValue("password", self.ui.passEdit.text())
-        util.settings.setValue("autoupdate_map", self.ui.autoUpdateMapCheck.isChecked())
-        util.settings.setValue("autoupdate_mods", self.ui.autoUpdateModsCheck.isChecked())
 
         util.settings.setValue("enforce_rating_range", self.ui.enforceRatingCheck.isChecked())
         util.settings.setValue("rating_min", self.ui.ratingMinSpinBox.value())
