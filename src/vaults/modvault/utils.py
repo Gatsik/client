@@ -10,6 +10,7 @@ from PyQt6 import QtGui
 from PyQt6 import QtWidgets
 
 from src import util
+from src.api.vaults_api import LatestModVersions
 from src.config import Settings
 from src.util import PREFSFILENAME
 from src.vaults import luaparser
@@ -362,12 +363,16 @@ def generateThumbnail(sourcename, destname):
         return False
 
 
-def downloadMod(link: str, name: str) -> bool:
+def downloadMod(link: str, name: str, *, replace_existing: bool = False) -> bool:
     logger.debug("Getting mod from: %s", link)
 
     def handle_exist(path: str, modname: str) -> bool:
         modpath = os.path.join(path, modname)
         oldmod = getModInfoFromFolder(modpath)
+        if replace_existing:
+            if oldmod is not None:
+                removeMod(oldmod)
+            return True
         result = QtWidgets.QMessageBox.question(
             None,
             "Modfolder already exists",
@@ -420,3 +425,41 @@ def remove_mod_by_uid(uid: str) -> bool:
         if mod.uid == uid:
             return removeMod(mod)
     return False
+
+
+def updateModsToLatest(mods: list[ModInfo]) -> list[ModInfo]:
+    latest_versions = LatestModVersions().request_and_get_latest_versions([m.uid for m in mods])
+    installed_uids = {m.uid for m in getInstalledMods()}
+
+    replaced: dict[str, str] = {}  # old uid -> new uid
+    for mod in mods:
+        latest = latest_versions.get(mod.uid)
+        if latest is None:
+            logger.debug("Mod '%s' not found in the vault, skipping update", mod.totalname)
+            continue
+        if latest["uid"] == mod.uid or latest.get("version", 0) <= mod.version:
+            logger.debug("Mod '%s' is up to date", mod.totalname)
+            continue
+        if latest["uid"] in installed_uids:
+            logger.debug("Newer version of '%s' is already installed", mod.totalname)
+            replaced[mod.uid] = latest["uid"]
+            continue
+        logger.debug("Updating mod '%s' to v%s", mod.totalname, latest.get("version"))
+        if downloadMod(latest["downloadUrl"], mod.localfolder, replace_existing=True):
+            # new version may have been extracted into another folder
+            if any(m.uid == mod.uid for m in installedMods):
+                removeMod(mod)
+            replaced[mod.uid] = latest["uid"]
+
+    if not replaced:
+        return mods
+
+    installed = {m.uid: m for m in getInstalledMods()}
+    result = []
+    for mod in mods:
+        uid = replaced.get(mod.uid, mod.uid)
+        if uid in installed:
+            result.append(installed[uid])
+        else:
+            logger.warning("Mod '%s' is missing after update", mod.totalname)
+    return result

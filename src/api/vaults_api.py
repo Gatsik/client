@@ -6,6 +6,8 @@ from typing import Any
 from typing import cast
 
 from PyQt6.QtCore import QByteArray
+from PyQt6.QtCore import QEventLoop
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtNetwork import QNetworkReply
 
 from src.api.ApiAccessors import DataApiAccessor
@@ -207,3 +209,35 @@ class ReviewsApiConnector(VaultsApiConnector):
         json_api_name = decapitalize(review.__class__.__name__)
         endpoint = f"/data/{json_api_name}/{review.xd}"
         self.patch(endpoint, payload, handler, error_handler, review)
+
+
+class LatestModVersions(DataApiAccessor):
+    ready = pyqtSignal()
+
+    def __init__(self) -> None:
+        super().__init__("/data/modVersion")
+        self.latest: dict[str, dict[str, Any]] = {}
+        self.wait_loop = QEventLoop()
+        self.ready.connect(self.wait_loop.quit)
+
+    def store_latest_versions(self, message: ParsedDataApiResponse) -> None:
+        assert isinstance(message["data"], list)
+        for version in message["data"]:
+            latest = (version.get("mod") or {}).get("latestVersion") or {}
+            if "uid" in version and "uid" in latest:
+                self.latest[version["uid"]] = latest
+        self.ready.emit()
+
+    def request_and_get_latest_versions(self, uids: list[str]) -> dict[str, dict[str, Any]]:
+        self.latest = {}
+        if not uids:
+            return self.latest
+        quoted = ",".join(f"'{uid}'" for uid in uids)
+        query: QueryOptions = {
+            "filter": f"uid=in=({quoted})",
+            "include": "mod.latestVersion",
+            "page[size]": len(uids),
+        }
+        self.get_parsed(query, self.store_latest_versions, lambda _: self.ready.emit())
+        self.wait_loop.exec()
+        return self.latest

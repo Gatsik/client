@@ -276,6 +276,10 @@ class HostGameDialogUi:
         self.hostButton.setObjectName("hostGameButton")
         self.hostButton.setMinimumSize(120, 35)
 
+        self.autoUpdateCheck = QCheckBox("Update selected mods before hosting")
+        self.autoUpdateCheck.setToolTip("Download the latest vault versions of the selected mods")
+
+        bottom_layout.addWidget(self.autoUpdateCheck)
         bottom_layout.addStretch()
         bottom_layout.addWidget(self.saveAndCloseButton)
         bottom_layout.addWidget(self.hostButton)

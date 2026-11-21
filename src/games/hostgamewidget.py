@@ -40,6 +40,7 @@ from src.vaults.modvault.utils import ModInfo
 from src.vaults.modvault.utils import getActiveMods
 from src.vaults.modvault.utils import getInstalledMods
 from src.vaults.modvault.utils import setActiveMods
+from src.vaults.modvault.utils import updateModsToLatest
 
 if TYPE_CHECKING:
     from src.client._clientwindow import ClientWindow
@@ -403,6 +404,8 @@ class HostGameWidget(QDialog):
         self.ui.titleEdit.setText(game.title)
         self.ui.passEdit.setText(self.password)
         self.ui.passCheck.setChecked(self.game.password_protected)
+        autoupdate = Settings.get("fa.games/autoupdate_mods", False, type=bool)
+        self.ui.autoUpdateCheck.setChecked(autoupdate)
         self.ui.radioFriends.setChecked(self.game.visibility == GameVisibility.FRIENDS)
         self.ui.enforceRatingCheck.setChecked(self.game.enforce_rating_range)
         if self.game.rating_min is not None:
@@ -569,17 +572,22 @@ class HostGameWidget(QDialog):
                 rating_max=self.ui.ratingMaxSpinBox.value(),
             )
 
+        mods = self.selected_mods()
+        if self.ui.autoUpdateCheck.isChecked():
+            mods = updateModsToLatest(mods)
+
         self.save_last_hosted_settings()
-        self.save_active_mods()
+        self.save_active_mods(mods)
 
         self.launch.emit(self.game, password)
         self.done(0)
 
-    def save_active_mods(self) -> None:
-        mods = [
-            self.mods[moditem.text()]
-            for moditem in self.ui.modList.selectedItems()
-        ]
+    def selected_mods(self) -> list[ModInfo]:
+        return [self.mods[moditem.text()] for moditem in self.ui.modList.selectedItems()]
+
+    def save_active_mods(self, mods: list[ModInfo] | None = None) -> None:
+        if mods is None:
+            mods = self.selected_mods()
         setActiveMods(mods, None, False)
 
     def save_last_hosted_settings(self) -> None:
@@ -590,6 +598,7 @@ class HostGameWidget(QDialog):
         util.settings.setValue("friends_only", self.ui.radioFriends.isChecked())
 
         util.settings.setValue("password", self.ui.passEdit.text())
+        util.settings.setValue("autoupdate_mods", self.ui.autoUpdateCheck.isChecked())
 
         util.settings.setValue("enforce_rating_range", self.ui.enforceRatingCheck.isChecked())
         util.settings.setValue("rating_min", self.ui.ratingMinSpinBox.value())

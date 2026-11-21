@@ -35,6 +35,7 @@ class ModsManagerDialog(HostGameWidget):
         self.ui.previewGroup.hide()
         self.ui.saveAndCloseButton.hide()
         self.ui.hostButton.hide()
+        self.ui.autoUpdateCheck.hide()
 
         self.ui.deselectUiMods.hide()
         self.ui.deselectSimMods.hide()
