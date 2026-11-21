@@ -15,6 +15,7 @@ from PyQt6 import QtCore
 from PyQt6 import QtGui
 
 from src import util
+from src.api.vaults_api import LatestMapVersion
 from src.config import Settings
 from src.fa.maps_.map_utils import get_scmap_file
 from src.fa.maps_.preview import create_large_preview
@@ -608,3 +609,33 @@ def clear_generated_maps() -> None:
             continue
         if entry.is_dir() and re.match(mapgenUtils.generatedMapPattern, entry.name):
             shutil.rmtree(entry.path)
+
+
+def updateMapToLatest(mapname: str) -> str:
+    if isBase(mapname) or isGeneratedMap(mapname) or (folder := folderForMap(mapname)) is None:
+        return mapname
+
+    current, latest = LatestMapVersion().request_and_get_versions(os.path.basename(folder))
+    if not latest:
+        logger.debug("Map '%s' not found in the vault, skipping update", mapname)
+        return mapname
+    new_name = latest["folderName"].lower()
+    if new_name == mapname.lower() or latest.get("version", 0) <= current.get("version", 0):
+        logger.debug("Map '%s' is up to date", mapname)
+        return mapname
+    if isMapAvailable(new_name):
+        logger.debug("Newer version of '%s' is already installed", mapname)
+        return new_name
+
+    logger.debug("Updating map '%s' to '%s'", mapname, new_name)
+    if not downloadMap(latest["folderName"]):
+        return mapname
+
+    FavouriteMaps.load_from_cache()
+    if mapname.lower() in FavouriteMaps:
+        FavouriteMaps.discard(mapname.lower())
+        FavouriteMaps.add(new_name)
+    shutil.rmtree(folder, ignore_errors=True)
+    CachedMapsMetadata.sanitize()
+    CachedMapsMetadata.get_map(new_name)
+    return new_name

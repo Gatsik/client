@@ -27,7 +27,8 @@ class MapsManagerDialog(HostGameWidget):
         self.ui.modsGroup.hide()
         self.ui.saveAndCloseButton.hide()
         self.ui.hostButton.hide()
-        self.ui.autoUpdateCheck.hide()
+        self.ui.autoUpdateMapCheck.hide()
+        self.ui.autoUpdateModsCheck.hide()
 
         dir_icon = QLabel()
         drive_pix = self.style().standardPixmap(QStyle.StandardPixmap.SP_DriveFDIcon)

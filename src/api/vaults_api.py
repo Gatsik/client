@@ -241,3 +241,32 @@ class LatestModVersions(DataApiAccessor):
         self.get_parsed(query, self.store_latest_versions, lambda _: self.ready.emit())
         self.wait_loop.exec()
         return self.latest
+
+
+class LatestMapVersion(DataApiAccessor):
+    ready = pyqtSignal()
+
+    def __init__(self) -> None:
+        super().__init__("/data/mapVersion")
+        self.current: dict[str, Any] = {}
+        self.latest: dict[str, Any] = {}
+        self.wait_loop = QEventLoop()
+        self.ready.connect(self.wait_loop.quit)
+
+    def store_versions(self, message: ParsedDataApiResponse) -> None:
+        assert isinstance(message["data"], list)
+        if message["data"]:
+            self.current = message["data"][0]
+            self.latest = (self.current.get("map") or {}).get("latestVersion") or {}
+        self.ready.emit()
+
+    def request_and_get_versions(self, folder_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        self.current, self.latest = {}, {}
+        query: QueryOptions = {
+            "filter": f"folderName=='{folder_name}'",
+            "include": "map.latestVersion",
+            "page[size]": 1,
+        }
+        self.get_parsed(query, self.store_versions, lambda _: self.ready.emit())
+        self.wait_loop.exec()
+        return self.current, self.latest
