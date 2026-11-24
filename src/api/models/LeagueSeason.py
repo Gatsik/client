@@ -5,6 +5,7 @@ from src.api.models.LeagueLeaderboard import LeagueLeaderboard
 
 
 class LeagueSeason(ConfiguredModel):
+    xd:                 str                = Field(alias="id")
     end_date:           str                = Field(alias="endDate")
     name:               str                = Field(alias="nameKey")
     placement_games:    int                = Field(alias="placementGames")

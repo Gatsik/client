@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 
 from PyQt6.QtCore import pyqtSignal
 
@@ -29,6 +30,23 @@ class PlayerApiConnector(DataApiAccessor):
             'fields[nameRecord]': 'name,changeTime,player',
         }
         self.get_parsed(query, self.alias_info.emit)
+
+    def get_logins(
+        self,
+        player_ids: list[str],
+        handler: Callable[[dict[str, str]], None],
+    ) -> None:
+        query: QueryOptions = {
+            "filter": "id=in=({})".format(",".join(player_ids)),
+            "fields[player]": "login",
+            "page[size]": len(player_ids),
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            assert isinstance(message["data"], list)
+            handler({entry["id"]: entry["login"] for entry in message["data"]})
+
+        self.get_parsed(query, handle)
 
     def request_player(self, player_id: str) -> None:
         query: QueryOptions = {

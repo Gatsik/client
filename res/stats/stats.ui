@@ -42,6 +42,32 @@
     </item>
    </layout>
   </widget>
+  <widget class="QWidget" name="leaguesTab">
+   <attribute name="title">
+    <string>Leagues</string>
+   </attribute>
+   <layout class="QGridLayout" name="leaguesTabLayout">
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item row="0" column="0">
+     <widget class="QTabWidget" name="leagueLeaderboards">
+      <property name="currentIndex">
+       <number>-1</number>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
   <widget class="QWidget" name="ladderTab">
    <attribute name="title">
     <string>Ladder</string>

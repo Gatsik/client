@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from collections.abc import Iterator
 from copy import copy
 from operator import methodcaller
@@ -16,7 +17,9 @@ from src.api.ApiBase import QueryOptions
 from src.api.models.Achievement import Achievement
 from src.api.models.Leaderboard import Leaderboard
 from src.api.models.LeaderboardRating import LeaderboardRating
+from src.api.models.LeagueSeason import LeagueSeason
 from src.api.models.LeagueSeasonScore import LeagueSeasonScore
+from src.api.models.LeagueSubdivision import LeagueSubdivision
 from src.api.models.PlayerAchievement import PlayerAchievement
 from src.api.models.PlayerEvent import PlayerEvent
 
@@ -157,6 +160,134 @@ class LeagueSeasonScoreApiConnector(DataApiAccessor):
             "filter": ";".join(self.filters(player_id)),
         }
         self.get_parsed(cast(QueryOptions, query_params), self.handle_season_scores)
+
+
+class LeagueSeasonApiConnector(DataApiAccessor):
+    def __init__(self) -> None:
+        super().__init__("/data/leagueSeason")
+
+    def get_current_seasons(self, handler: Callable[[list[LeagueSeason]], None]) -> None:
+        now = QDateTime.currentDateTime().toUTC().toString(Qt.DateFormat.ISODate)
+        query: QueryOptions = {
+            "include": "leaderboard",
+            "filter": f"startDate=le={now};endDate=ge={now}",
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            assert isinstance(message["data"], list)
+            handler([LeagueSeason(**entry) for entry in message["data"]])
+
+        self.get_parsed(query, handle)
+
+
+class LeagueSubdivisionApiConnector(DataApiAccessor):
+    def __init__(self) -> None:
+        super().__init__("/data/leagueSeasonDivisionSubdivision")
+
+    def get_season_subdivisions(
+        self,
+        season_id: str,
+        handler: Callable[[list[LeagueSubdivision]], None],
+    ) -> None:
+        query: QueryOptions = {
+            "include": "leagueSeasonDivision",
+            "filter": f"leagueSeasonDivision.leagueSeason.id=={season_id}",
+            "page[size]": 1000,
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            assert isinstance(message["data"], list)
+            subdivisions = [LeagueSubdivision(**entry) for entry in message["data"]]
+            handler(
+                sorted(
+                    subdivisions,
+                    key=lambda sub: (sub.division.index if sub.division else 0, sub.index),
+                    reverse=True,
+                ),
+            )
+
+        self.get_parsed(query, handle)
+
+
+class LeagueScoreboardApiConnector(DataApiAccessor):
+    def __init__(self) -> None:
+        super().__init__("/data/leagueSeasonScore")
+
+    def get_scores(
+        self,
+        season_id: str,
+        subdivision_id: str | None,
+        page: int,
+        page_size: int,
+        handler: Callable[[ParsedDataApiResponse], None],
+        error_handler: Callable[[QNetworkReply], None],
+    ) -> QNetworkReply:
+        if subdivision_id is None:
+            scope = "score=isnull=false"
+            sort = ",".join((
+                "-leagueSeasonDivisionSubdivision.leagueSeasonDivision.divisionIndex",
+                "-leagueSeasonDivisionSubdivision.subdivisionIndex",
+                "-score",
+                "-gameCount",
+            ))
+        else:
+            scope = f"leagueSeasonDivisionSubdivision.id=={subdivision_id}"
+            sort = "-score,-gameCount"
+        query: QueryOptions = {
+            "filter": f"leagueSeason.id=={season_id};{scope}",
+            "sort": sort,
+            "page[size]": page_size,
+            "page[number]": page,
+            "page[totals]": "yes",
+        }
+        return self.get_parsed(query, handler, error_handler)
+
+    def get_player_score(
+        self,
+        season_id: str,
+        player_id: str,
+        handler: Callable[[LeagueSeasonScore | None], None],
+    ) -> None:
+        query: QueryOptions = {
+            "include": "leagueSeasonDivisionSubdivision",
+            "filter": f"leagueSeason.id=={season_id};loginId=={player_id}",
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            assert isinstance(message["data"], list)
+            handler(LeagueSeasonScore(**message["data"][0]) if message["data"] else None)
+
+        self.get_parsed(query, handle)
+
+    def get_rank(
+        self,
+        season_id: str,
+        subdivision_id: str,
+        score: LeagueSeasonScore,
+        higher_subdivision_ids: list[str],
+        handler: Callable[[int], None],
+    ) -> None:
+        same_subdivision = (
+            f"(leagueSeasonDivisionSubdivision.id=={subdivision_id};"
+            f"(score=gt={score.score},(score=={score.score};gameCount=gt={score.game_count})))"
+        )
+        if higher_subdivision_ids:
+            higher = "{}.id=in=({})".format(
+                "leagueSeasonDivisionSubdivision", ",".join(higher_subdivision_ids),
+            )
+            above = f"({higher},{same_subdivision})"
+        else:
+            above = same_subdivision
+        query: QueryOptions = {
+            "filter": f"leagueSeason.id=={season_id};score=isnull=false;{above}",
+            "page[size]": 1,
+            "page[totals]": "yes",
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            handler(message.get("meta", {}).get("page", {}).get("totalRecords", 0))
+
+        self.get_parsed(query, handle)
 
 
 class PlayerEventApiAccessor(DataApiAccessor):

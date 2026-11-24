@@ -5,6 +5,7 @@ from src.api.models.LeagueDivision import LeagueDivision
 
 
 class LeagueSubdivision(ConfiguredModel):
+    xd:               str                   = Field(alias="id")
     index:            int                   = Field(alias="subdivisionIndex")
     name:             str                   = Field(alias="nameKey")
     description:      str                   = Field(alias="descriptionKey")
