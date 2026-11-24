@@ -85,7 +85,7 @@ class LeagueLeaderboardWidget(BaseClass, FormClass):
         header.setSortIndicatorShown(True)
 
         self.subdivisionBox.currentIndexChanged.connect(self.on_subdivision_changed)
-        self.searchPlayerLine.textEdited.connect(self.search_player_completion)
+        self.searchPlayerLine.typingFinished.connect(self.search_player_completion)
         self.searchPlayerLine.returnPressed.connect(self.find_player)
         self.searchPlayerButton.clicked.connect(self.find_player)
         self.quantityBox.editingFinished.connect(self.on_page_size_changed)

@@ -1,15 +1,30 @@
 from PyQt6 import QtCore
 from PyQt6 import QtWidgets
+from PyQt6.QtGui import QFocusEvent
 
 
 # TODO: probably create a common ancestor of ChatLineEdit and this
 class LeaderboardLineEdit(QtWidgets.QLineEdit):
+    typingFinished = QtCore.pyqtSignal(str)
+    TYPING_DELAY_MS = 300
+
     def __init__(self, parent):
         super().__init__(parent)
         self.completionStarted = False
         self.currenLocalChatter = None
         self.LocalNameList = []
         self.completionList = None
+
+        self._typing_timer = QtCore.QTimer(self)
+        self._typing_timer.setSingleShot(True)
+        self._typing_timer.setInterval(self.TYPING_DELAY_MS)
+        self._typing_timer.timeout.connect(lambda: self.typingFinished.emit(self.text()))
+        self.textEdited.connect(lambda _: self._typing_timer.start())
+        self.returnPressed.connect(self._typing_timer.stop)
+
+    def focusOutEvent(self, event: QFocusEvent | None) -> None:
+        self._typing_timer.stop()
+        super().focusOutEvent(event)
 
     def set_completion_list(self, list_):
         self.completionList = list_

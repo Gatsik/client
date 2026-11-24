@@ -78,7 +78,7 @@ class LeaderboardWidget(BaseClass, FormClass):
             lambda: self.findEntry(self.findInPageLine.text()),
         )
 
-        self.searchPlayerLine.textEdited.connect(self.searchPlayer)
+        self.searchPlayerLine.typingFinished.connect(self.searchPlayer)
         self.searchPlayerLine.returnPressed.connect(
             self.searchPlayerInLeaderboard,
         )
