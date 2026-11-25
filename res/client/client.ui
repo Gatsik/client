@@ -85,7 +85,7 @@
        <enum>QTabWidget::TabShape::Rounded</enum>
       </property>
       <property name="currentIndex">
-       <number>7</number>
+       <number>0</number>
       </property>
       <property name="iconSize">
        <size>
@@ -126,6 +126,25 @@
         <string>Chat Lobby</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout">
+        <property name="leftMargin">
+         <number>6</number>
+        </property>
+        <property name="topMargin">
+         <number>6</number>
+        </property>
+        <property name="rightMargin">
+         <number>6</number>
+        </property>
+        <property name="bottomMargin">
+         <number>6</number>
+        </property>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="playersTab">
+       <attribute name="title">
+        <string>Players</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout_players">
         <property name="leftMargin">
          <number>6</number>
         </property>

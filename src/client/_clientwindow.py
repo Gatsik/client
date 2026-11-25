@@ -71,6 +71,9 @@ from src.model.rating import MatchmakerQueueType
 from src.model.rating import RatingType
 from src.news import NewsWidget
 from src.oauth.oauth_flow import OAuth2FlowInstance
+from src.players.players_model import PlayersFilterModel
+from src.players.players_model import PlayersTableModel
+from src.players.players_widget import PlayersWidget
 from src.power import PowerTools
 from src.protocol.lobbyprotocol import AuthenticationFailedCommand
 from src.protocol.lobbyprotocol import GameJoinFailedCommand
@@ -414,6 +417,10 @@ class ClientWindow(FormClass, BaseClass):
         self.mainTabs.setTabIcon(
             self.mainTabs.indexOf(self.chatTab),
             util.THEME.icon("client/chat.png"),
+        )
+        self.mainTabs.setTabIcon(
+            self.mainTabs.indexOf(self.playersTab),
+            util.THEME.icon("client/players.png"),
         )
         self.mainTabs.setTabIcon(
             self.mainTabs.indexOf(self.gamesTab),
@@ -808,6 +815,16 @@ class ClientWindow(FormClass, BaseClass):
             chat_restorer, chat_announcer, chat_view,
         )
 
+        players_model = PlayersTableModel(
+            self.players, self.me, self.user_relations, self.player_colors,
+            self.avatar_downloader, self.map_preview_downloader, self.user_notes,
+        )
+        self.players_widget = PlayersWidget(
+            PlayersFilterModel(players_model, self.me, self.user_relations),
+            self.player_ctx_menu, self._game_runner, chat_controller, self._chat_model.chatters,
+        )
+        self.players_widget.private_chat_opened.connect(self._show_chat_tab)
+
         self.authorized.connect(self._connect_chat)
 
         self.logo = StatusLogo(self, self._chatMVC.model)
@@ -843,6 +860,7 @@ class ClientWindow(FormClass, BaseClass):
         # .ui file
         self.whatNewTab.layout().addWidget(self.news)
         self.chatTab.layout().addWidget(self._chatMVC.view.widget.base)
+        self.playersTab.layout().addWidget(self.players_widget)
         self.coopTab.layout().addWidget(self.coop)
         self.gamesTab.layout().addWidget(self.games)
         self.ladderTab.layout().addWidget(self.ladder)
@@ -1368,6 +1386,9 @@ class ClientWindow(FormClass, BaseClass):
     def vault_tab_changed(self, curr):
         self.tab_changed(self.topTabs, curr, self._vault_tab)
         self._vault_tab = curr
+
+    def _show_chat_tab(self) -> None:
+        self.mainTabs.setCurrentIndex(self.mainTabs.indexOf(self.chatTab))
 
     def view_replays(self, name: str) -> None:
         self.replays.set_player(name)
