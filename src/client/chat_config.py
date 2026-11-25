@@ -1,5 +1,6 @@
 from PyQt6 import QtCore
 
+from src.chat.chatter_group import ChatterGroup
 from src.chat.chatter_model import ChatterLayoutElements
 from src.client.user import SignallingSet  # TODO - move to util
 
@@ -47,6 +48,10 @@ class ChatConfig(QtCore.QObject):
         self.hide_chatter_items.added.connect(self._emit_hidden_items)
         self.hide_chatter_items.removed.connect(self._emit_hidden_items)
 
+        self.collapsed_chatter_groups = SignallingSet[ChatterGroup]()
+        self.collapsed_chatter_groups.added.connect(self._at_collapsed_groups_changed)
+        self.collapsed_chatter_groups.removed.connect(self._at_collapsed_groups_changed)
+
         self.chat_line_trim_count = 1
         self.announcement_channels = []
         self.channel_greeting = []
@@ -56,6 +61,17 @@ class ChatConfig(QtCore.QObject):
 
     def _emit_hidden_items(self):
         self.updated.emit("hide_chatter_items")
+
+    def _at_collapsed_groups_changed(self) -> None:
+        groups = " ".join(group.name for group in self.collapsed_chatter_groups)
+        self._settings.setValue("chat/collapsed_chatter_groups", groups)
+        self.updated.emit("collapsed_chatter_groups")
+
+    def toggle_chatter_group(self, group: ChatterGroup) -> None:
+        if group in self.collapsed_chatter_groups:
+            self.collapsed_chatter_groups.discard(group)
+        else:
+            self.collapsed_chatter_groups.add(group)
 
     def load_settings(self) -> None:
         s = self._settings
@@ -76,6 +92,12 @@ class ChatConfig(QtCore.QObject):
                 pass
         self.hide_chatter_items.clear()
         self.hide_chatter_items |= hidden
+
+        names = (s.value("chat/collapsed_chatter_groups", ChatterGroup.AWAY.name) or "").split()
+        collapsed = {ChatterGroup[name] for name in names if name in ChatterGroup.__members__}
+        if collapsed != set(self.collapsed_chatter_groups):
+            self.collapsed_chatter_groups.clear()
+            self.collapsed_chatter_groups |= collapsed
 
     def save_settings(self):
         s = self._settings

@@ -67,7 +67,7 @@ class QtListModel[U, T: QtListModelItem](QAbstractListModel):
         self.endRemoveRows()
 
     def _clear_items(self) -> None:
-        self.beginRemoveRows(QModelIndex(), 0, len(self._items) - 1)
+        self.beginRemoveRows(QModelIndex(), 0, len(self._itemlist) - 1)
         for item in self._items.values():
             item.updated.disconnect(self._at_item_updated)
         self._items.clear()

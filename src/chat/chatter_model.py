@@ -6,6 +6,7 @@ from enum import Enum
 from enum import IntEnum
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import NamedTuple
 from typing import Self
 
 from PyQt6 import QtCore
@@ -24,6 +25,8 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtGui import QIcon
 
 from src import util
+from src.chat.chatter_group import ChatterGroup
+from src.chat.chatter_group import ChatterGroupItem
 from src.chat.chatter_menu import ChatterMenu
 from src.chat.chatter_model_item import ChatterModelItem
 from src.chat.chatterlistview import ChatterListView
@@ -66,7 +69,8 @@ class ChatterModel(QtListModel[ChannelChatter, ChatterModelItem]):
         self._channel = channel
         self._sorter = sorter
         self._sorter.changed.connect(self._resort)
-        self._keys: dict[ChatterModelItem, ChatterSortKey] = {}
+        self._keys: dict[ChatterListItem, ChatterSortKey] = {}
+        self._groups: dict[ChatterGroupKey, ChatterGroupItem] = {}
 
         self._pending: dict[Hashable, ChannelChatter] = {}
         self._pending_timer = QTimer(self, singleShot=True, timeout=self._add_pending)
@@ -102,18 +106,52 @@ class ChatterModel(QtListModel[ChannelChatter, ChatterModelItem]):
         end = self.index(len(self._itemlist) - 1)
         self.dataChanged.emit(start, end)
 
-    def _row(self, item: ChatterModelItem) -> int:
+    def _row(self, item: ChatterListItem) -> int:
         return bisect_left(self._itemlist, self._keys[item], key=self._keys.__getitem__)
 
+    def group_of(self, item: ChatterModelItem) -> ChatterGroup | None:
+        gkey = self._keys[item].group_key
+        return None if gkey is None else gkey.group
+
+    def _join_group(self, key: ChatterSortKey) -> ChatterGroupItem | None:
+        if (gkey := key.group_key) is None:
+            return None
+        if (header := self._groups.get(gkey)) is None:
+            header = self._groups[gkey] = ChatterGroupItem(gkey.group)
+            self._keys[header] = gkey.header_sort_key()
+        header.count += 1
+        return header
+
+    def _leave_group(self, key: ChatterSortKey) -> None:
+        if (gkey := key.group_key) is None:
+            return
+        header = self._groups[gkey]
+        header.count -= 1
+        if header.count > 0:
+            self._header_changed(header)
+            return
+        self._take_row(self._row(header))
+        del self._groups[gkey]
+        del self._keys[header]
+
+    def _header_changed(self, header: ChatterGroupItem) -> None:
+        index = self.index(self._row(header), 0)
+        self.dataChanged.emit(index, index)
+
     def _add_items(self, chatters: Iterable[ChannelChatter]) -> None:
-        new = []
+        new: list[ChatterListItem] = []
+        headers: set[ChatterGroupItem] = set()
         for cc in chatters:
             assert cc.id_key not in self._items
             item = self._item_builder(cc)
             item.updated.connect(self._at_item_updated)
             self._items[cc.id_key] = item
-            self._keys[item] = self._sorter.key(item)
+            key = self._keys[item] = self._sorter.key(item)
             new.append(item)
+            if (header := self._join_group(key)) is not None:
+                headers.add(header)
+                if header.count == 1:
+                    new.append(header)
         if not new:
             return
         if not self._itemlist or len(new) > self.MAX_SINGLE_INSERTS:
@@ -123,8 +161,10 @@ class ChatterModel(QtListModel[ChannelChatter, ChatterModelItem]):
         else:
             for item in new:
                 self._insert_row(item)
+            for header in headers:
+                self._header_changed(header)
 
-    def _insert_row(self, item: ChatterModelItem) -> None:
+    def _insert_row(self, item: ChatterListItem) -> None:
         row = self._row(item)
         self.beginInsertRows(QModelIndex(), row, row)
         self._itemlist.insert(row, item)
@@ -139,26 +179,37 @@ class ChatterModel(QtListModel[ChannelChatter, ChatterModelItem]):
         item = self._items.pop(id_)
         item.updated.disconnect(self._at_item_updated)
         self._take_row(self._row(item))
-        del self._keys[item]
+        self._leave_group(self._keys.pop(item))
 
     def _clear_items(self) -> None:
         if self._itemlist:
             super()._clear_items()
         self._keys.clear()
+        self._groups.clear()
 
     def _at_item_updated(self, item: ChatterModelItem) -> None:
         if item not in self._keys:
             return
         row = self._row(item)
+        old_key = self._keys[item]
         key = self._keys[item] = self._sorter.key(item)
         items = self._itemlist
+        regrouped = old_key.group_key != key.group_key
         if (
-            (row > 0 and key < self._keys[items[row - 1]])
+            regrouped
+            or (row > 0 and key < self._keys[items[row - 1]])
             or (row + 1 < len(items) and self._keys[items[row + 1]] < key)
         ):
             # remove and insert rather than move, which the filter model
             # handles as a layout change and re-filters every row
             self._take_row(row)
+            if regrouped:
+                self._leave_group(old_key)
+                if (header := self._join_group(key)) is not None:
+                    if header.count == 1:
+                        self._insert_row(header)
+                    else:
+                        self._header_changed(header)
             self._insert_row(item)
         else:
             index = self.index(row, 0)
@@ -166,12 +217,19 @@ class ChatterModel(QtListModel[ChannelChatter, ChatterModelItem]):
 
     def _resort(self) -> None:
         self.beginResetModel()
-        self._keys = {item: self._sorter.key(item) for item in self._itemlist}
+        self._keys.clear()
+        self._groups.clear()
+        self._itemlist = list(self._items.values())
+        for item in self._items.values():
+            key = self._keys[item] = self._sorter.key(item)
+            if (header := self._join_group(key)) is not None and header.count == 1:
+                self._itemlist.append(header)
         self._itemlist.sort(key=self._keys.__getitem__)
         self.endResetModel()
 
 
 class ChatterRank(IntEnum):
+    ME = -2
     FRIEND_ON_TOP = -1
     ELEVATED = 0
     FRIEND = 1
@@ -182,7 +240,46 @@ class ChatterRank(IntEnum):
     FOE = 6
 
 
-type ChatterSortKey = tuple[bool, ChatterRank, bool, str, str]
+RANK_GROUPS = {
+    ChatterRank.FRIEND_ON_TOP: ChatterGroup.FRIENDS,
+    ChatterRank.ELEVATED: ChatterGroup.MODERATORS,
+    ChatterRank.FRIEND: ChatterGroup.FRIENDS,
+    ChatterRank.CLANNIE: ChatterGroup.CLAN,
+    ChatterRank.USER: ChatterGroup.PLAYERS,
+    ChatterRank.NONPLAYER: ChatterGroup.IRC,
+    ChatterRank.CHATTERBOX: ChatterGroup.CHATTERBOXES,
+    ChatterRank.FOE: ChatterGroup.FOES,
+}
+
+
+class ChatterGroupKey(NamedTuple):
+    away: bool
+    rank: ChatterRank
+
+    @property
+    def group(self) -> ChatterGroup:
+        return ChatterGroup.AWAY if self.away else RANK_GROUPS[self.rank]
+
+    def header_sort_key(self) -> ChatterSortKey:
+        return ChatterSortKey(self.away, self.rank, "", "")
+
+
+class ChatterSortKey(NamedTuple):
+    away: bool
+    rank: ChatterRank
+    lower_name: str
+    name: str
+
+    @property
+    def group_key(self) -> ChatterGroupKey | None:
+        if self.rank == ChatterRank.ME:
+            return None
+        if self.away:
+            return ChatterGroupKey(away=True, rank=min(ChatterRank))
+        return ChatterGroupKey(away=False, rank=self.rank)
+
+
+type ChatterListItem = ChatterModelItem | ChatterGroupItem
 
 
 class ChatterSorter(QObject):
@@ -214,11 +311,19 @@ class ChatterSorter(QObject):
     def key(self, item: ChatterModelItem) -> ChatterSortKey:
         chatter = item.chatter
         name = chatter.name
-        return (name != self._me.login, self._get_user_rank(item), chatter.away, name.lower(), name)
+        rank = self._get_user_rank(item)
+        return ChatterSortKey(
+            away=chatter.away and rank != ChatterRank.ME,
+            rank=rank,
+            lower_name=name.lower(),
+            name=name,
+        )
 
     def _get_user_rank(self, item):
-        pid = item.player.id if item.player is not None else None
         name = item.chatter.name
+        if name == self._me.login:
+            return ChatterRank.ME
+        pid = item.player.id if item.player is not None else None
         is_friend = self._user_relations.is_friend(pid, name)
         if self._chat_config.friendsontop and is_friend:
             return ChatterRank.FRIEND_ON_TOP
@@ -242,13 +347,20 @@ class ChatterSorter(QObject):
 
 
 class ChatterFilterModel(QSortFilterProxyModel):
-    def __init__(self, model: ChatterModel) -> None:
+    def __init__(self, model: ChatterModel, chat_config: ChatConfig) -> None:
         QSortFilterProxyModel.__init__(self)
         self.setSourceModel(model)
+        self._chat_config = chat_config
+        self._chat_config.updated.connect(self._at_chat_config_updated)
 
     @classmethod
-    def build(cls, model: ChatterModel, **kwargs: Any) -> Self:
-        return cls(model)
+    def build(cls, model: ChatterModel, chat_config: ChatConfig, **kwargs: Any) -> Self:
+        return cls(model, chat_config)
+
+    def _at_chat_config_updated(self, setting: str) -> None:
+        if setting == "collapsed_chatter_groups":
+            self.beginFilterChange()
+            self.endFilterChange(QSortFilterProxyModel.Direction.Rows)
 
     def filterAcceptsRow(self, row: int, parent: QtCore.QModelIndex) -> bool:
         source = self.sourceModel()
@@ -256,8 +368,12 @@ class ChatterFilterModel(QSortFilterProxyModel):
         if not index.isValid():
             return False
         data = source.data(index, Qt.ItemDataRole.DisplayRole)
-        displayed_name = ChatterFormat.chatter_name(data.chatter)
-        return self.filterRegularExpression().match(displayed_name).hasMatch()
+        regex = self.filterRegularExpression()
+        if isinstance(data, ChatterGroupItem):
+            return not regex.pattern()
+        if regex.pattern():
+            return regex.match(ChatterFormat.chatter_name(data.chatter)).hasMatch()
+        return source.group_of(data) not in self._chat_config.collapsed_chatter_groups
 
     def invalidate_items(self):
         self.sourceModel().invalidate_items()
@@ -479,15 +595,21 @@ class ChatterItemFormatter:
 
 
 class ChatterItemDelegate(StyledItemDelegate):
-    def __init__(self, layout: ChatterLayout, formatter: ChatterItemFormatter) -> None:
+    def __init__(
+        self,
+        layout: ChatterLayout,
+        formatter: ChatterItemFormatter,
+        chat_config: ChatConfig,
+    ) -> None:
         StyledItemDelegate.__init__(self)
         self.layout = layout
         self._formatter = formatter
+        self._chat_config = chat_config
 
     @classmethod
-    def build(cls, layout: ChatterLayout, **kwargs: Any) -> Self:
+    def build(cls, layout: ChatterLayout, chat_config: ChatConfig, **kwargs: Any) -> Self:
         formatter = ChatterItemFormatter.build(**kwargs)
-        return cls(layout, formatter)
+        return cls(layout, formatter, chat_config)
 
     def update_width(self, size):
         current_size = self.layout.size
@@ -501,6 +623,10 @@ class ChatterItemDelegate(StyledItemDelegate):
         data = index.data()
 
         self._draw_clear_option(painter, option)
+        if isinstance(data, ChatterGroupItem):
+            self._draw_group_header(painter, option, data)
+            painter.restore()
+            return
         self._handle_highlight(painter, option)
 
         painter.translate(option.rect.left(), option.rect.top())
@@ -519,6 +645,23 @@ class ChatterItemDelegate(StyledItemDelegate):
             draw[item](painter, data)
 
         painter.restore()
+
+    def _draw_group_header(
+            self,
+            painter: QtGui.QPainter,
+            option: QtWidgets.QStyleOptionViewItem,
+            header: ChatterGroupItem,
+    ) -> None:
+        collapsed = header.group in self._chat_config.collapsed_chatter_groups
+        arrow = "\u25b8" if collapsed else "\u25be"
+        text = f"{arrow} {header.group.value} ({header.count})"
+        font = QtGui.QFont(option.font)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(option.palette.color(QtGui.QPalette.ColorRole.Text))
+        rect = option.rect.adjusted(4, 0, -4, 0)
+        text = self._get_elided_text(painter, text, width=rect.width())
+        painter.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
 
     def _handle_highlight(
             self,
@@ -703,11 +846,13 @@ class ChatterEventFilter(QObject):
         chatter_layout: ChatterLayout,
         tooltip_handler: ChatterItemDelegate,
         menu_handler: ChatterMenu,
+        chat_config: ChatConfig,
     ) -> None:
         QObject.__init__(self)
         self._chatter_layout = chatter_layout
         self._tooltip_handler = tooltip_handler
         self._menu_handler = menu_handler
+        self._chat_config = chat_config
 
     @classmethod
     def build(
@@ -715,11 +860,14 @@ class ChatterEventFilter(QObject):
         chatter_layout: ChatterLayout,
         tooltip_handler: ChatterItemDelegate,
         menu_handler: ChatterMenu,
+        chat_config: ChatConfig,
         **kwargs: Any,
     ) -> Self:
-        return cls(chatter_layout, tooltip_handler, menu_handler)
+        return cls(chatter_layout, tooltip_handler, menu_handler, chat_config)
 
     def eventFilter(self, obj, event):
+        if self._handle_group_click(obj, event):
+            return True
         if event.type() == QtCore.QEvent.Type.ToolTip:
             return self._handle_tooltip(obj, event)
         elif event.type() == QtCore.QEvent.Type.MouseButtonRelease:
@@ -729,6 +877,19 @@ class ChatterEventFilter(QObject):
             if event.button() == QtCore.Qt.MouseButton.LeftButton:
                 return self._handle_double_click(obj, event)
         return super().eventFilter(obj, event)
+
+    def _handle_group_click(self, widget: QtWidgets.QWidget, event: QtCore.QEvent) -> bool:
+        Type = QtCore.QEvent.Type
+        clicks = (Type.MouseButtonPress, Type.MouseButtonRelease, Type.MouseButtonDblClick)
+        if event.type() not in clicks or event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return False
+        data, _ = self._get_data_and_elem(widget, event)
+        if not isinstance(data, ChatterGroupItem):
+            return False
+        # toggled on release, since every click has exactly one, also within a double click
+        if event.type() == Type.MouseButtonRelease:
+            self._chat_config.toggle_chatter_group(data.group)
+        return True
 
     def _get_data_and_elem(
             self,
@@ -746,7 +907,7 @@ class ChatterEventFilter(QObject):
 
     def _handle_tooltip(self, widget: QtWidgets.QWidget, event: QtGui.QMouseEvent) -> bool:
         data, elem = self._get_data_and_elem(widget, event)
-        if data is None:
+        if data is None or isinstance(data, ChatterGroupItem):
             return False
         tooltip_text = self._tooltip_handler.get_tooltip(data, elem)
         if tooltip_text is None:
@@ -757,7 +918,7 @@ class ChatterEventFilter(QObject):
 
     def _handle_context_menu(self, widget: QtWidgets.QWidget, event: QtGui.QMouseEvent) -> bool:
         data, elem = self._get_data_and_elem(widget, event)
-        if data is None:
+        if data is None or isinstance(data, ChatterGroupItem):
             return False
 
         player_id = data.player.id if data.player is not None else -1

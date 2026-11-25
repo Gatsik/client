@@ -171,8 +171,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
 
         self._history_asked: set[str] = set()
         self._pending_names: dict[str, list[ChatterInfo]] = {}
-        self._awaiting_who: dict[str, list[ChatterInfo]] = {}
-        self._who_away: dict[str, dict[str, bool]] = {}
+        self._awaiting_who: dict[str, dict[str, ChatterInfo]] = {}
         self._whox = False
 
         self._keepalive_timer = QTimer()
@@ -345,7 +344,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
             name = data.strip(IRC_ELEVATION)
             elevation = data[0] if data[0] in IRC_ELEVATION else ""
             hostname = ''
-            return ChatterInfo(name, hostname, elevation)
+            return ChatterInfo(name, hostname, elevation, away=False)
 
         pending = self._pending_names.setdefault(e.arguments[1], [])
         pending.extend(userdata(user) for user in listing)
@@ -359,16 +358,15 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         chatters = self._pending_names.pop(channel, [])
         if not chatters:
             return
-        self._awaiting_who[channel] = chatters
-        self._who_away[channel] = {}
+        self._awaiting_who[channel] = {chatter.name: chatter for chatter in chatters}
         if self._whox:
             self.connection.send_items("WHO", channel, f"%tcnf,{WHOX_TOKEN}")
         else:
             self.connection.who(channel)
 
     def _add_who_reply(self, channel: str, nick: str, flags: str) -> None:
-        if (away := self._who_away.get(channel)) is not None:
-            away[nick] = flags.startswith("G")
+        if (chatter := self._awaiting_who.get(channel, {}).get(nick)) is not None:
+            chatter.away = flags.startswith("G")
 
     def on_whoreply(self, c: ServerConnection, e: Event) -> None:
         channel, _user, _host, _server, nick, flags = e.arguments[:6]
@@ -381,15 +379,9 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         self._add_who_reply(channel, nick, flags)
 
     def on_endofwho(self, c: ServerConnection, e: Event) -> None:
-        channel = e.arguments[0]
-        chatters = self._awaiting_who.pop(channel, None)
-        away = self._who_away.pop(channel, {})
-        if chatters is None:
-            return
-        for chatter in chatters:
-            chatter.away = away.get(chatter.name, False)
-        cid = ChannelID(ChannelType.PUBLIC, channel)
-        self.new_channel_chatters.emit(cid, chatters)
+        if (chatters := self._awaiting_who.pop(e.arguments[0], None)) is not None:
+            cid = ChannelID(ChannelType.PUBLIC, e.arguments[0])
+            self.new_channel_chatters.emit(cid, list(chatters.values()))
 
     def on_away(self, c: ServerConnection, e: Event) -> None:
         if "!" in e.source:
@@ -572,7 +564,6 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         self._keepalive_timer.stop()
         self._pending_names.clear()
         self._awaiting_who.clear()
-        self._who_away.clear()
         self.disconnected.emit()
         message = e.arguments[0]
         logger.info("Disconnected from chat: %s", message)
