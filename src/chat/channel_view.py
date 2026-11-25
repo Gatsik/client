@@ -88,12 +88,8 @@ class ChannelView:
             self._update_chatter_count()
 
     def _update_chatter_count(self) -> None:
-        here = len(self._channel.chatters) - self._away_count
-        if self._away_count:
-            text = f"{here} users, {self._away_count} away (type to filter)"
-        else:
-            text = f"{here} users (type to filter)"
-        self.widget.set_nick_edit_label(text)
+        online = len(self._channel.chatters) - self._away_count
+        self.widget.set_nick_edit_label(f"{online} users (type to filter)")
 
     @classmethod
     def build(
