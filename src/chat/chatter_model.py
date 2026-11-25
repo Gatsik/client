@@ -73,7 +73,9 @@ class ChatterModel(QtListModel[ChannelChatter, ChatterModelItem]):
         self._groups: dict[ChatterGroupKey, ChatterGroupItem] = {}
 
         self._pending: dict[Hashable, ChannelChatter] = {}
-        self._pending_timer = QTimer(self, singleShot=True, timeout=self._add_pending)
+        self._pending_timer = QTimer(self)
+        self._pending_timer.setSingleShot(True)
+        self._pending_timer.timeout.connect(self._add_pending)
 
         self._channel.added_chatter.connect(self.add_chatter)
         self._channel.removed_chatter.connect(self.remove_chatter)
