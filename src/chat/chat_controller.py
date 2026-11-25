@@ -5,6 +5,7 @@ from typing import Self
 from PyQt6.QtCore import QObject
 from PyQt6.QtCore import pyqtSignal
 
+from src.chat.ircconnection import ChatterInfo
 from src.chat.ircconnection import IrcConnection
 from src.client.chat_config import ChatConfig
 from src.client.user import UserRelationModel
@@ -25,6 +26,7 @@ from src.model.chat.chatterset import Chatterset
 
 class ChatController(QObject):
     join_requested = pyqtSignal(object)
+    chatter_away_changed = pyqtSignal(object)
 
     def __init__(
         self,
@@ -50,6 +52,7 @@ class ChatController(QObject):
         c.chatter_quit.connect(self._at_chatter_quit)
         c.quit_channel.connect(self._at_quit_channel)
         c.chatter_renamed.connect(self._at_chatter_renamed)
+        c.chatter_away_changed.connect(self._at_chatter_away_changed)
         c.new_chatter_elevation.connect(self._at_new_chatter_elevation)
         c.new_channel_topic.connect(self._at_new_channel_topic)
         c.connected.connect(self._at_connected)
@@ -107,12 +110,25 @@ class ChatController(QObject):
         if key not in self._ccs:
             self._ccs[key] = ChannelChatter(channel, chatter, "")
 
-    def _check_add_new_chatter(self, cinfo):
+    def _check_add_new_chatter(self, cinfo: ChatterInfo) -> Chatter:
         if cinfo.name not in self._chatters:
-            chatter = Chatter(cinfo.name, cinfo.hostname)
+            chatter = Chatter(cinfo.name, cinfo.hostname, bool(cinfo.away))
             self._chatters[chatter.name] = chatter
             self._join_chatter_to_his_privchannel(chatter.name)
-        return self._chatters[cinfo.name]
+            return chatter
+        chatter = self._chatters[cinfo.name]
+        if cinfo.away is not None:
+            self._set_away(chatter, cinfo.away)
+        return chatter
+
+    def _set_away(self, chatter: Chatter, away: bool) -> None:
+        if chatter.away != away:
+            chatter.update(away=away)
+            self.chatter_away_changed.emit(chatter)
+
+    def _at_chatter_away_changed(self, name: str, away: bool) -> None:
+        if (chatter := self._chatters.get(name)) is not None:
+            self._set_away(chatter, away)
 
     def _add_or_update_cc(self, cid, cinfo):
         channel = self._check_add_new_channel(cid)

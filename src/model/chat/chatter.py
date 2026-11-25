@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Self
@@ -21,11 +19,12 @@ class Chatter(ModelItem):
     added_channel = pyqtSignal(object)
     removed_channel = pyqtSignal(object)
 
-    def __init__(self, name: str, hostname: str) -> None:
+    def __init__(self, name: str, hostname: str, away: bool = False) -> None:
         ModelItem.__init__(self)
         self.name = name
         self.hostname = hostname
-        self._data_fields.extend(("name", "hostname"))
+        self.away = away
+        self._data_fields.extend(("name", "hostname", "away"))
         self._player = None
         self.channels: dict[tuple[ChannelID, str], ChannelChatter] = {}
 

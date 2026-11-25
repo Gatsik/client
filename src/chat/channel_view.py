@@ -35,8 +35,10 @@ from src.downloadManager import DownloadRequest
 from src.fa.game_runner import GameRunner
 from src.model.chat.channel import Channel
 from src.model.chat.channel import ChannelType
+from src.model.chat.channelchatter import ChannelChatter
 from src.model.chat.chatline import ChatLineMetadata
 from src.model.chat.chatline import ChatLineType
+from src.model.chat.chatter import Chatter
 from src.util import irc_escape
 from src.util.gameurl import GameUrl
 from src.util.theme import ThemeSet
@@ -66,12 +68,31 @@ class ChannelView:
         if self._channel.id_key.type == ChannelType.PRIVATE:
             self.widget.show_chatter_list(False)
 
-        self._channel.added_chatter.connect(self._update_chatter_count)
-        self._channel.removed_chatter.connect(self._update_chatter_count)
+        self._away_count = sum(cc.chatter.away for cc in self._channel.chatters.values())
+        self._channel.added_chatter.connect(self._at_chatter_added)
+        self._channel.removed_chatter.connect(self._at_chatter_removed)
+        self._controller.chatter_away_changed.connect(self._at_chatter_away_changed)
         self._update_chatter_count()
 
-    def _update_chatter_count(self):
-        text = f"{len(self._channel.chatters)} users (type to filter)"
+    def _at_chatter_added(self, cc: ChannelChatter) -> None:
+        self._away_count += cc.chatter.away
+        self._update_chatter_count()
+
+    def _at_chatter_removed(self, cc: ChannelChatter) -> None:
+        self._away_count -= cc.chatter.away
+        self._update_chatter_count()
+
+    def _at_chatter_away_changed(self, chatter: Chatter) -> None:
+        if any(cc.channel is self._channel for cc in chatter.channels.values()):
+            self._away_count += 1 if chatter.away else -1
+            self._update_chatter_count()
+
+    def _update_chatter_count(self) -> None:
+        here = len(self._channel.chatters) - self._away_count
+        if self._away_count:
+            text = f"{here} users, {self._away_count} away (type to filter)"
+        else:
+            text = f"{here} users (type to filter)"
         self.widget.set_nick_edit_label(text)
 
     @classmethod

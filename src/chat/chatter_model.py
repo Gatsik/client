@@ -182,7 +182,7 @@ class ChatterRank(IntEnum):
     FOE = 6
 
 
-type ChatterSortKey = tuple[bool, ChatterRank, str, str]
+type ChatterSortKey = tuple[bool, ChatterRank, bool, str, str]
 
 
 class ChatterSorter(QObject):
@@ -212,8 +212,9 @@ class ChatterSorter(QObject):
         return cls(me, user_relations, chat_config)
 
     def key(self, item: ChatterModelItem) -> ChatterSortKey:
-        name = item.chatter.name
-        return (name != self._me.login, self._get_user_rank(item), name.lower(), name)
+        chatter = item.chatter
+        name = chatter.name
+        return (name != self._me.login, self._get_user_rank(item), chatter.away, name.lower(), name)
 
     def _get_user_rank(self, item):
         pid = item.player.id if item.player is not None else None
@@ -471,7 +472,10 @@ class ChatterItemFormatter:
         return self.chatter_country(data)
 
     def nick_tooltip(self, data):
-        return self.country_tooltip(data)
+        country = self.country_tooltip(data)
+        if not data.chatter.away:
+            return country
+        return "Away" if country is None else f"{country} (away)"
 
 
 class ChatterItemDelegate(StyledItemDelegate):
@@ -527,6 +531,8 @@ class ChatterItemDelegate(StyledItemDelegate):
     def _draw_nick(self, painter: QtGui.QPainter, data: ChatterModelItem) -> None:
         text = self._formatter.chatter_name(data)
         color = QColor(self._formatter.chatter_color(data))
+        if data.chatter.away:
+            color.setAlphaF(0.4)
         clip = QRect(self.layout.sizes[ChatterLayoutElements.NICK])
         text = self._get_elided_text(painter, text, width=clip.width())
 
