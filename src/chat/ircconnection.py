@@ -31,6 +31,8 @@ from src.model.chat.chatline import ChatLineType
 logger = logging.getLogger(__name__)
 IRC_ELEVATION = '%@~%+&'
 WHOX_TOKEN = "117"
+CAPABILITIES = ("server-time", "away-notify", "message-tags", "echo-message")
+REPLY_TAGS = ("+draft/reply", "+reply")
 
 
 class IrcLogFilter(logging.Filter):
@@ -173,6 +175,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         self._pending_names: dict[str, list[ChatterInfo]] = {}
         self._awaiting_who: dict[str, dict[str, ChatterInfo]] = {}
         self._whox = False
+        self._caps: set[str] = set()
 
         self._keepalive_timer = QTimer()
         self._keepalive_timer.setInterval(30 * 1000)
@@ -213,8 +216,21 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
             self.reconnector.reconnect()
 
     def _request_capabilities(self) -> None:
-        for cap in ("server-time", "away-notify"):
+        for cap in CAPABILITIES:
             self.connection.send_items("CAP", "REQ", f":{cap}")
+
+    def on_cap(self, c: ServerConnection, e: Event) -> None:
+        if len(e.arguments) < 2:
+            return
+        subcommand, caps = e.arguments[0], set(e.arguments[1].split())
+        if subcommand == "ACK":
+            self._caps |= caps
+        elif subcommand == "DEL":
+            self._caps -= caps
+
+    @property
+    def echoes_messages(self) -> bool:
+        return "echo-message" in self._caps
 
     def connect_(self, nick: str, username: str, password: str) -> bool:
         logger.info("Connecting to IRC at: %s:%d", self.host, self.port)
@@ -251,12 +267,20 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         self.connection.topic(channel, topic)
 
     @_only_if_connected
-    def send_message(self, target: str, text: str) -> None:
-        self.connection.privmsg(target, text)
+    def send_message(self, target: str, text: str, reply_to: str | None = None) -> None:
+        if reply_to is not None and "message-tags" in self._caps:
+            self.connection.send_raw(f"@{REPLY_TAGS[0]}={reply_to} PRIVMSG {target} :{text}")
+        else:
+            self.connection.privmsg(target, text)
 
     @_only_if_connected
-    def send_action(self, target: str, text: str) -> None:
-        self.connection.action(target, text)
+    def send_action(self, target: str, text: str, reply_to: str | None = None) -> None:
+        if reply_to is not None and "message-tags" in self._caps:
+            self.connection.send_raw(
+                f"@{REPLY_TAGS[0]}={reply_to} PRIVMSG {target} :\x01ACTION {text}\x01",
+            )
+        else:
+            self.connection.action(target, text)
 
     @_only_if_connected
     def join(self, channel: str) -> None:
@@ -479,30 +503,34 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         channel_type: ChannelType,
         text: str,
         type_: ChatLineType = ChatLineType.MESSAGE,
-        timestamp: float | None = None,
+        tags: list[dict[str, str | None]] | None = None,
     ) -> None:
-        if channel_type == ChannelType.PUBLIC:
+        if channel_type == ChannelType.PUBLIC or self._is_me(chatter.name):
             channel_name = target
         else:
             channel_name = chatter.name
         chid = ChannelID(channel_type, channel_name)
-        line = ChatLine(chatter.name, text, type_, timestamp)
+        tag_values = {tag["key"]: tag["value"] for tag in tags or ()}
+        if (stamp := tag_values.get("time")) is not None:
+            timestamp = QDateTime.fromString(stamp, Qt.DateFormat.ISODate).toSecsSinceEpoch()
+        else:
+            timestamp = None
+        reply_to = next(filter(None, map(tag_values.get, REPLY_TAGS)), None)
+        line = ChatLine(
+            chatter.name, text, type_, timestamp, tag_values.get("msgid"), reply_to,
+        )
         self.new_line.emit(chid, chatter, line)
+
+    def _is_me(self, name: str) -> bool:
+        nick = self.connection.get_nickname()
+        return nick is not None and name.lower() == nick.lower()
 
     def on_pubmsg(self, c: ServerConnection, e: Event) -> None:
         chatter = self._event_to_chatter(e)
         if chatter.name.startswith("HistServ"):
             return
-        target = e.target
         text = "\n".join(e.arguments)
-
-        if len(e.tags) > 0 and e.tags[0]["key"] == "time":
-            date = QDateTime.fromString(e.tags[0]["value"], Qt.DateFormat.ISODate)
-            timestamp = date.toSecsSinceEpoch()
-        else:
-            timestamp = None
-
-        self._emit_line(chatter, target, ChannelType.PUBLIC, text, timestamp=timestamp)
+        self._emit_line(chatter, e.target, ChannelType.PUBLIC, text, tags=e.tags)
 
     def on_privnotice(self, c: ServerConnection, e: Event) -> None:
         if e.source == self.host:
@@ -523,7 +551,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
         else:
             channel_type = ChannelType.PRIVATE
         self._emit_line(
-            chatter, msg_target, channel_type, text, ChatLineType.NOTICE,
+            chatter, msg_target, channel_type, text, ChatLineType.NOTICE, e.tags,
         )
 
     # Parsing message to get target channel instead is non-standard.  To limit
@@ -561,6 +589,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
 
     def on_disconnect(self, c: ServerConnection, e: Event) -> None:
         self._connected = False
+        self._caps.clear()
         self._keepalive_timer.stop()
         self._pending_names.clear()
         self._awaiting_who.clear()
@@ -571,7 +600,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
     def on_privmsg(self, c: ServerConnection, e: Event) -> None:
         chatter = self._event_to_chatter(e)
         text = "\n".join(e.arguments)
-        self._emit_line(chatter, None, ChannelType.PRIVATE, text)
+        self._emit_line(chatter, e.target, ChannelType.PRIVATE, text, tags=e.tags)
 
     def on_action(self, c: ServerConnection, e: Event) -> None:
         chatter = self._event_to_chatter(e)
@@ -581,7 +610,7 @@ class IrcConnection(SimpleIRCClient, IrcSignals):
             chtype = ChannelType.PUBLIC
         else:
             chtype = ChannelType.PRIVATE
-        self._emit_line(chatter, target, chtype, text, ChatLineType.ACTION)
+        self._emit_line(chatter, target, chtype, text, ChatLineType.ACTION, e.tags)
 
     def on_nosuchnick(self, c: ServerConnection, e: Event) -> None:
         self._nickserv_register()

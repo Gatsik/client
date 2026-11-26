@@ -691,6 +691,7 @@ class OptionsDialog(FormClass, BaseClass):
             avatar=avatar,
             tags=tags,
             padding=self.spinChatPadding.value(),
+            reply="",
         )
         self.browserChatArea.append(formatted)
 

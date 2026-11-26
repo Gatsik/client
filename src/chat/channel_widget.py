@@ -12,6 +12,7 @@ from PyQt6.QtCore import QUrl
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFontMetrics
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtGui import QShortcut
 from PyQt6.QtGui import QSyntaxHighlighter
@@ -23,8 +24,11 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtWidgets import QFrame
 from PyQt6.QtWidgets import QLabel
 from PyQt6.QtWidgets import QLineEdit
+from PyQt6.QtWidgets import QMenu
 from PyQt6.QtWidgets import QPushButton
 
+from src.chat.chat_area import ChatArea
+from src.chat.chat_area import ChatAreaEntry
 from src.client.chat_config import ChatConfig
 from src.config import Settings
 from src.model.chat.channel import Channel
@@ -66,10 +70,12 @@ class SearchHighlighter(QSyntaxHighlighter):
 
 
 class ChannelWidget(QObject):
-    line_typed = pyqtSignal(str)
+    line_typed = pyqtSignal(str, object)
     chatter_list_resized = pyqtSignal(object)
     url_clicked = pyqtSignal(QUrl)
     css_reloaded = pyqtSignal()
+    reply_requested = pyqtSignal(object)
+    menu_requested = pyqtSignal(QMenu, object)
 
     def __init__(
         self,
@@ -83,10 +89,14 @@ class ChannelWidget(QObject):
         self._chat_area_css = chat_area_css
         self._chat_area_css.changed.connect(self._reload_css)
         self._chat_config = chat_config
+        self._reply_to: object | None = None
         self.set_theme(theme)
 
         self._search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self.chat_edit)
         self._search_shortcut.activated.connect(self._toggle_search)
+        self._cancel_reply_shortcut = QShortcut(QKeySequence("Escape"), self.chat_edit)
+        self._cancel_reply_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        self._cancel_reply_shortcut.activated.connect(self.cancel_reply)
 
         self.search_button.clicked.connect(self._find_text)
         self.clear_search_button.clicked.connect(self._reset_search)
@@ -109,7 +119,7 @@ class ChannelWidget(QObject):
         return cls(channel, chat_area_css, theme, chat_config)
 
     @property
-    def chat_area(self):
+    def chat_area(self) -> ChatArea:
         return self.form.chatArea
 
     @property
@@ -152,6 +162,14 @@ class ChannelWidget(QObject):
     def clear_search_button(self) -> QPushButton:
         return self.form.clearSearchButton
 
+    @property
+    def reply_frame(self) -> QFrame:
+        return self.form.replyFrame
+
+    @property
+    def reply_label(self) -> QLabel:
+        return self.form.replyLabel
+
     def set_theme(self, theme: ThemeSet) -> None:
         formc, basec = theme.loadUiType("chat/channel.ui")
         self.form = formc()
@@ -166,6 +184,10 @@ class ChannelWidget(QObject):
         self.chat_edit.set_channel(self.channel)
         self.nick_filter.textChanged.connect(self._set_chatter_filter)
         self.chat_area.anchorClicked.connect(self._url_clicked)
+        self.chat_area.reply_requested.connect(self.reply_requested.emit)
+        self.chat_area.menu_requested.connect(self.menu_requested.emit)
+        self.form.cancelReplyButton.clicked.connect(self.cancel_reply)
+        self.reply_frame.hide()
         self._override_widget_methods()
         self._load_css()
         self._set_font()
@@ -219,7 +241,7 @@ class ChannelWidget(QObject):
         self.chat_area.document().setDefaultStyleSheet(self._chat_area_css.css)
 
     def clear_chat(self):
-        self.chat_area.document().setHtml("")
+        self.chat_area.clear_entries()
 
     def add_avatar_resource(self, url, pix):
         doc = self.chat_area.document()
@@ -239,25 +261,40 @@ class ChannelWidget(QObject):
             line = re.sub(r'\s', ' ', line).strip()
             if not line:
                 continue
-            self.line_typed.emit(line)
+            reply_to, self._reply_to = self._reply_to, None
+            self.line_typed.emit(line, reply_to)
+        if self._reply_to is None:
+            self.reply_frame.hide()
+
+    def start_reply(self, payload: object, description: str) -> None:
+        self._reply_to = payload
+        metrics = QFontMetrics(self.reply_label.font())
+        self.reply_label.setToolTip(description)
+        self.reply_label.setText(
+            metrics.elidedText(description, Qt.TextElideMode.ElideRight, self.chat_edit.width()),
+        )
+        self.reply_frame.show()
+        self.chat_edit.setFocus()
+
+    def cancel_reply(self) -> None:
+        self._reply_to = None
+        self.reply_frame.hide()
+
+    def insert_text(self, text: str) -> None:
+        self.chat_edit.insert(text)
+        self.chat_edit.setFocus()
 
     def show_chatter_list(self, should_show):
         self.nick_frame.setVisible(should_show)
 
-    def append_line(self, text: str) -> None:
-        self.chat_area.append(text)
+    def append_line(self, text: str, entry: ChatAreaEntry) -> None:
+        self.chat_area.append_entry(text, entry)
 
     def remove_lines(self, number: int) -> None:
-        doc = self.chat_area.document()
-        frames = doc.rootFrame().childFrames()
-        if number <= 0 or not frames:
-            return
-        cursor = QTextCursor(doc)
-        if number < len(frames):
-            cursor.setPosition(frames[number].firstPosition() - 1, QTextCursor.MoveMode.KeepAnchor)
-        else:
-            cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
-        cursor.removeSelectedText()
+        self.chat_area.remove_entries(number)
+
+    def flash_entry(self, index: int) -> None:
+        self.chat_area.flash_entry(index)
 
     def set_chatter_delegate(self, delegate):
         self.nick_list.setItemDelegate(delegate)

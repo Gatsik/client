@@ -100,3 +100,12 @@ a.game_link {
 	text-align: center;
 	font-weight: bold;
 }
+
+.col_reply {
+	font-size: small;
+}
+
+.col_reply a {
+	color: #8c8c8c;
+	text-decoration: none;
+}

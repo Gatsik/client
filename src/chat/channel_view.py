@@ -12,13 +12,19 @@ from PyQt6.QtCore import QDate
 from PyQt6.QtCore import QDateTime
 from PyQt6.QtCore import QObject
 from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QUrl
 from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QAction
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtGui import QFont
 from PyQt6.QtGui import QFontMetrics
+from PyQt6.QtGui import QTextDocumentFragment
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QMenu
 
 from src.chat.channel_tab import TabInfo
 from src.chat.channel_widget import ChannelWidget
+from src.chat.chat_area import ChatAreaEntry
 from src.chat.chat_controller import ChatController
 from src.chat.chatter_menu import ChatterMenu
 from src.chat.chatter_model import ChatterEventFilter
@@ -49,6 +55,9 @@ from src.util.theme import ThemeSet
 if TYPE_CHECKING:
     from src.chat.channel_tab import ChannelTab
 
+REPLY_SCHEME = "faf-reply"
+REPLYABLE_TYPES = (ChatLineType.MESSAGE, ChatLineType.ACTION)
+
 
 class ChannelView:
     def __init__(
@@ -68,6 +77,8 @@ class ChannelView:
         self._channel_tab = channel_tab
 
         self.widget.line_typed.connect(self._at_line_typed)
+        self.widget.reply_requested.connect(self._start_reply)
+        self.widget.menu_requested.connect(self._extend_line_menu)
         if self._channel.id_key.type == ChannelType.PRIVATE:
             self.widget.show_chatter_list(False)
 
@@ -121,8 +132,47 @@ class ChannelView:
             return cls.build(channel, controller, channel_tab, **kwargs)
         return make
 
-    def _at_line_typed(self, line):
-        self._controller.send_message(self._channel.id_key, line)
+    def _at_line_typed(self, line: str, reply: ChatLineMetadata | None) -> None:
+        if reply is None:
+            self._controller.send_message(self._channel.id_key, line)
+            return
+        sender = reply.line.sender
+        if sender and not line.startswith("/") and sender.lower() not in line.lower():
+            line = f"@{sender} {line}"
+        self._controller.send_message(self._channel.id_key, line, reply.line.msgid)
+
+    def _start_reply(self, data: ChatLineMetadata) -> None:
+        if data.line.msgid is None:
+            return
+        self.widget.start_reply(data, f"Replying to @{data.line.sender}: {data.line.text}")
+
+    def _extend_line_menu(self, menu: QMenu, data: ChatLineMetadata) -> None:
+        line = data.line
+        first = menu.actions()[0] if menu.actions() else None
+        actions: list[QAction] = []
+
+        def add(text: str, slot: Callable[[], Any]) -> None:
+            action = QAction(text, menu)
+            action.triggered.connect(slot)
+            actions.append(action)
+
+        if line.msgid is not None and line.type in REPLYABLE_TYPES:
+            add("Reply", lambda: self._start_reply(data))
+        if line.sender:
+            add("Mention", lambda: self.widget.insert_text(f"@{line.sender} "))
+            is_me = data.meta.is_me and data.meta.is_me()
+            if self._channel.id_key.type == ChannelType.PUBLIC and not is_me:
+                add(
+                    "Private message",
+                    lambda: self._controller.join_private_channel(line.sender),
+                )
+        add("Copy message", lambda: QApplication.clipboard().setText(line.text))
+        if line.sender:
+            add("Copy name", lambda: QApplication.clipboard().setText(line.sender))
+
+        menu.insertActions(first, actions)
+        if first is not None:
+            menu.insertSeparator(first)
 
     def on_shown(self):
         self._channel_tab.info = TabInfo.IDLE
@@ -180,10 +230,27 @@ class ChatAreaView:
 
     def _append_line(self, data: ChatLineMetadata) -> None:
         separator = self._formatter.date_separator(data.line.time)
-        if separator:
-            self._widget.append_line(separator)
-        self._separators.append(bool(separator))
-        self._widget.append_line(self._formatter.format(data, self._widget.font()))
+        if separator is not None:
+            html, label = separator
+            self._widget.append_line(html, ChatAreaEntry(None, f"-- {label} --"))
+        self._separators.append(separator is not None)
+
+        parent = self._find_line(data.line.reply_to) if data.line.reply_to else None
+        html = self._formatter.format(data, self._widget.font(), parent)
+        payload = None if data.line.type == ChatLineType.RAW else data
+        replyable = data.line.msgid is not None and data.line.type in REPLYABLE_TYPES
+        entry = ChatAreaEntry(payload, self._formatter.plain_text(data), replyable)
+        self._widget.append_line(html, entry)
+
+    def _find_line(self, msgid: str) -> ChatLineMetadata | None:
+        lines = reversed(self._channel.lines)
+        return next((data for data in lines if data.line.msgid == msgid), None)
+
+    def _jump_to_line(self, msgid: str) -> None:
+        for index, entry in enumerate(self._widget.chat_area.entries()):
+            if isinstance(entry.payload, ChatLineMetadata) and entry.payload.line.msgid == msgid:
+                self._widget.flash_entry(index)
+                return
 
     def _remove_lines(self, number):
         number = min(number, len(self._separators))
@@ -200,7 +267,10 @@ class ChatAreaView:
         else:
             self._widget.set_topic(irc_escape(topic))
 
-    def _at_url_clicked(self, url):
+    def _at_url_clicked(self, url: QUrl) -> None:
+        if url.scheme() == REPLY_SCHEME:
+            self._jump_to_line(url.path())
+            return
         if not GameUrl.is_game_url(url):
             QDesktopServices.openUrl(url)
             return
@@ -329,19 +399,21 @@ class ChatLineFormatter:
     def _set_theme(self, theme: ThemeSet) -> None:
         self._chatline_template = theme.readfile("chat/chatline.qhtml")
         self._avatar_template = theme.readfile("chat/chatline_avatar.qhtml")
+        self._reply_template = theme.readfile("chat/chatline_reply.qhtml")
         self._date_separator_template = theme.readfile("chat/date_separator.qhtml")
 
     def reset(self) -> None:
         self._last_timestamp = None
         self._last_day = QDate()
 
-    def date_separator(self, stamp: float) -> str:
+    def date_separator(self, stamp: float) -> tuple[str, str] | None:
         day = QDateTime.fromMSecsSinceEpoch(int(stamp * 1000)).date()
         if day == self._last_day:
-            return ""
+            return None
         self._last_day = day
         self._last_timestamp = None
-        return self._date_separator_template.format(date=self._day_label(day))
+        label = self._day_label(day)
+        return self._date_separator_template.format(date=label), label
 
     @staticmethod
     def _day_label(day: QDate) -> str:
@@ -401,7 +473,42 @@ class ChatLineFormatter:
         else:
             return text
 
-    def format(self, data: ChatLineMetadata, font: QFont) -> str:
+    def plain_text(self, data: ChatLineMetadata) -> str:
+        line = data.line
+        stamp = time.strftime('%H:%M', time.localtime(line.time))
+        text = line.text
+        if line.type in (ChatLineType.ANNOUNCEMENT, ChatLineType.RAW):
+            text = QTextDocumentFragment.fromHtml(text).toPlainText()
+        if not line.sender:
+            return f"{stamp} {text}"
+        if line.type in (ChatLineType.MESSAGE, ChatLineType.NOTICE):
+            return f"{stamp} {line.sender}: {text}"
+        if line.type == ChatLineType.ACTION:
+            return f"{stamp} * {line.sender} {text}"
+        return f"{stamp} {line.sender} {text}"
+
+    def _reply(self, data: ChatLineMetadata, parent: ChatLineMetadata | None) -> str:
+        msgid = data.line.reply_to
+        if msgid is None:
+            return ""
+        if parent is None:
+            context = "Replying to an earlier message"
+        else:
+            text = " ".join(parent.line.text.split())
+            if len(text) > 100:
+                text = text[:100] + "…"
+            context = f"@{parent.line.sender}: {text}"
+        return self._reply_template.format(
+            url=f"{REPLY_SCHEME}:{html.escape(msgid, quote=True)}",
+            text=html.escape(context),
+        )
+
+    def format(
+        self,
+        data: ChatLineMetadata,
+        font: QFont,
+        parent: ChatLineMetadata | None = None,
+    ) -> str:
         tags = " ".join(self._line_tags(data))
         avatar = self._avatar(data)
 
@@ -415,6 +522,9 @@ class ChatLineFormatter:
 
         if mtype == ChatLineType.RAW:
             return text
+
+        if parent is not None and text.startswith(prefix := f"@{parent.line.sender} "):
+            text = text.removeprefix(prefix)
 
         if mtype is not ChatLineType.ANNOUNCEMENT:
             text = self._wrap_me(irc_escape(text), data.meta.my_mention())
@@ -439,6 +549,7 @@ class ChatLineFormatter:
             text=text,
             avatar=avatar,
             tags=tags,
+            reply=self._reply(data, parent),
             padding=Settings.get("chat/font/padding", 10, type=int),
         )
 

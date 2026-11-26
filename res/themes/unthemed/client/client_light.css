@@ -605,6 +605,13 @@ QFrame#clanMember {
 }
 
 
+ChatArea {
+    qproperty-hoverColor: rgba(0, 0, 0, 15);
+    qproperty-flashColor: rgba(253, 224, 71, 80);
+    qproperty-replyButtonColor: #e5e7eb;
+    qproperty-replyButtonTextColor: #111827;
+}
+
 /* CUSTOM RULES - LIGHT THEME */
 QTextBrowser::custom {
     highlight-background-color: #FEF08A;

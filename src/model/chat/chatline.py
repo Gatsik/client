@@ -22,13 +22,23 @@ class ChatLineType(Enum):
 
 
 class ChatLine:
-    def __init__(self, sender, text, type_, timestamp=None):
+    def __init__(
+        self,
+        sender: str | None,
+        text: str,
+        type_: ChatLineType,
+        timestamp: float | None = None,
+        msgid: str | None = None,
+        reply_to: str | None = None,
+    ) -> None:
         self.sender = sender
         self.text = text
         if timestamp is None:
             timestamp = time.time()
         self.time = timestamp
         self.type = type_
+        self.msgid = msgid
+        self.reply_to = reply_to
 
 
 class ChatLineMetadata:

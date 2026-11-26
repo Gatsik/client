@@ -291,26 +291,19 @@ class ChatController(QObject):
         channel.lines.remove_lines(trim_amount)
 
     # User actions start here.
-    def send_message(self, cid, message):
+    def send_message(self, cid: ChannelID, message: str, reply_to: str | None = None) -> None:
         action, msg = MessageAction.parse_message(message)
         try:
             if action == MessageAction.MSG:
-                if self._connection.send_message(cid.name, msg):
-                    self._at_new_line(cid, None, self._user_chat_line(msg))
+                if self._connection.send_message(cid.name, msg, reply_to):
+                    self._echo_line(cid, msg, reply_to=reply_to)
             elif action == MessageAction.PRIVMSG:
                 chatter_name, msg = msg.split(" ", 1)
                 if self._connection.send_message(chatter_name, msg):
-                    cid = ChannelID.private_cid(chatter_name)
-                    self._at_new_line(cid, None, self._user_chat_line(msg))
+                    self._echo_line(ChannelID.private_cid(chatter_name), msg)
             elif action == MessageAction.ME:
-                if self._connection.send_action(cid.name, msg):
-                    self._at_new_line(
-                        cid,
-                        None,
-                        self._user_chat_line(
-                            msg, ChatLineType.ACTION,
-                        ),
-                    )
+                if self._connection.send_action(cid.name, msg, reply_to):
+                    self._echo_line(cid, msg, ChatLineType.ACTION, reply_to)
             elif action == MessageAction.SEEN:
                 self._connection.send_action("nickserv", f"info {msg}")
             elif action == MessageAction.TOPIC:
@@ -349,8 +342,16 @@ class ChatController(QObject):
     def join_private_channel(self, name):
         self.join_channel(ChannelID(ChannelType.PRIVATE, name))
 
-    def _user_chat_line(self, msg, type_=ChatLineType.MESSAGE):
-        return ChatLine(self._connection.nickname, msg, type_)
+    def _echo_line(
+        self,
+        cid: ChannelID,
+        msg: str,
+        type_: ChatLineType = ChatLineType.MESSAGE,
+        reply_to: str | None = None,
+    ) -> None:
+        if not self._connection.echoes_messages:
+            line = ChatLine(self._connection.nickname, msg, type_, reply_to=reply_to)
+            self._at_new_line(cid, None, line)
 
     def leave_channel(self, cid, reason):
         if cid.type == ChannelType.PRIVATE:
