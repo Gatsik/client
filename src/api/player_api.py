@@ -2,6 +2,7 @@ import logging
 from collections.abc import Callable
 
 from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtNetwork import QNetworkReply
 
 from src.api.ApiAccessors import DataApiAccessor
 from src.api.ApiAccessors import ParsedDataApiResponse
@@ -47,6 +48,24 @@ class PlayerApiConnector(DataApiAccessor):
             handler({entry["id"]: entry["login"] for entry in message["data"]})
 
         self.get_parsed(query, handle)
+
+    def search_logins(
+        self,
+        prefix: str,
+        handler: Callable[[list[str]], None],
+        limit: int = 20,
+    ) -> QNetworkReply:
+        query: QueryOptions = {
+            "filter": f'login=="{prefix}*"',
+            "fields[player]": "login",
+            "page[size]": limit,
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            assert isinstance(message["data"], list)
+            handler([entry["login"] for entry in message["data"]])
+
+        return self.get_parsed(query, handle)
 
     def request_player(self, player_id: str) -> None:
         query: QueryOptions = {

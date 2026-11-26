@@ -1687,6 +1687,12 @@ RatingPlotWidget::custom {
     background-color: #202025;
 }
 
+RatingComparisonPlot::custom {
+    player-color: orange;
+    me-color: #4C9AFF;
+    background-color: #202025;
+}
+
 ReplayToolBox#hideAll::custom:abstract-button {
     max-height: 0px;
 }

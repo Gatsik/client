@@ -18,9 +18,12 @@ from src.api.stats_api import LeagueSeasonScoreApiConnector
 from src.api.stats_api import PlayerEventApiAccessor
 from src.config import Settings
 from src.downloadManager import CachedImageDownloader
+from src.model.player import Player as OnlinePlayer
+from src.model.playerset import Playerset
 from src.playercard.achievements import AchievementsHandler
 from src.playercard.avatarhandler import AvatarHandler
 from src.playercard.clantab import ClanMembershipTab
+from src.playercard.comparison import RatingComparisonTab
 from src.playercard.leagueformatter import league_formatter_factory
 from src.playercard.ratingtabwidget import RatingTabWidgetController
 from src.playercard.statistics import StatsCharts
@@ -38,6 +41,8 @@ class PlayerProfileDialog(FormClass, BaseClass):
         avatar_dler: CachedImageDownloader,
         player_id: str,
         ctx_menu: PlayerContextMenu,
+        me: OnlinePlayer | None,
+        players: Playerset,
         parent: QWidget | None = None,
     ) -> None:
         BaseClass.__init__(self, parent)
@@ -57,6 +62,9 @@ class PlayerProfileDialog(FormClass, BaseClass):
         self.viewClanButton.clicked.connect(
             lambda: self.mainTabWidget.setCurrentIndex(clan_tab_index),
         )
+        self.me = me
+        self.comparison_tab = RatingComparisonTab([player.login for player in players.values()])
+        self.mainTabWidget.addTab(self.comparison_tab, "Compare")
         self.mainTabWidget.currentChanged.connect(self.on_tab_changed)
         self.tab_widget_ctrl = RatingTabWidgetController(
             player_id,
@@ -87,6 +95,7 @@ class PlayerProfileDialog(FormClass, BaseClass):
 
         self.player: Player | None = None
         self.player_ratings: list[LeaderboardRating] = []
+        self._ratings_received = False
         self.player_events: list[PlayerEvent] = []
 
         self._restore_geometry_from_settings()
@@ -102,6 +111,7 @@ class PlayerProfileDialog(FormClass, BaseClass):
         self.player_api.request_player(self.player_id)
         self.player_event_api.get_player_events(self.player_id)
         self.exec()
+        self.comparison_tab.abort_requests()
 
     def on_tab_changed(self, index: int) -> None:
         if index in self._loaded_tabs:
@@ -115,6 +125,9 @@ class PlayerProfileDialog(FormClass, BaseClass):
                 self.statsChartsLayout.addWidget(chartview)
         elif self.mainTabWidget.currentWidget() == self.clan_tab and self.player is not None:
             self.clan_tab.set_membership(self.player.custom_clan_membership)
+        elif self.mainTabWidget.currentWidget() == self.comparison_tab:
+            if self.me is not None and str(self.me.id) != self.player_id:
+                self.comparison_tab.request_player(1, self.me.login)
         self._loaded_tabs.add(index)
 
     def process_player_ratings(self, ratings: dict[str, list[LeaderboardRating]]) -> None:
@@ -128,6 +141,8 @@ class PlayerProfileDialog(FormClass, BaseClass):
             self.leaguesLayout.addWidget(widget)
         self.tab_widget_ctrl.setup(ratings["values"])
         self.player_ratings = ratings["values"]
+        self._ratings_received = True
+        self.update_comparison()
 
     def process_player(self, player: Player) -> None:
         self.setWindowTitle(player.login)
@@ -146,6 +161,13 @@ class PlayerProfileDialog(FormClass, BaseClass):
             self.clanNameLabel.setText(f"[{tag}] ({name})")
             self.clanJoinedLabel.setText(util.utctolocal(player.custom_clan_membership.create_time))
         self.player = player
+        self.update_comparison()
+
+    def update_comparison(self) -> None:
+        if self.player is None or not self._ratings_received:
+            return
+        if not self.comparison_tab.sides[0].login:
+            self.comparison_tab.set_player(0, self.player.login, self.player_ratings)
 
     def add_names(self, names: list[NameRecord] | None) -> None:
         if names is None:

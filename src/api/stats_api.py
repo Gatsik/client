@@ -39,6 +39,22 @@ class LeaderboardRatingApiConnector(DataApiAccessor):
         }
         self.get_parsed(query, self.handle_player_ratings)
 
+    def get_ratings_by_login(
+        self,
+        login: str,
+        handler: Callable[[list[LeaderboardRating]], None],
+    ) -> QNetworkReply:
+        query: QueryOptions = {
+            "include": "leaderboard",
+            "filter": f'player.login=="{login}"',
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            assert isinstance(message["data"], list)
+            handler([LeaderboardRating(**entry) for entry in message["data"]])
+
+        return self.get_parsed(query, handle)
+
     def handle_player_ratings(self, message: ParsedDataApiResponse) -> None:
         assert isinstance(message["data"], list)
         ratings = sorted(

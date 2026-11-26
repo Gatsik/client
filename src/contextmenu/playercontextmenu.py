@@ -302,6 +302,8 @@ class PlayerContextMenu:
             self._client_window.avatar_downloader,
             str(player_id),
             self,
+            self._me.player,
+            self._client_window.players,
             self._client_window,
         )
         dialog.run()
