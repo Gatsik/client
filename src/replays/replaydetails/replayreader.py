@@ -354,6 +354,9 @@ class ReplayParser(QObject):
         if function != "GiveResourcesToPlayer" or "Msg" not in lua:
             return
 
+        if not isinstance(lua["Msg"].get("to"), str):
+            return
+
         sender = int(lua["From"]) - 1
 
         # -2 => observer talking ...
