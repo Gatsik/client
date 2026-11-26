@@ -76,12 +76,14 @@ class ChatTabUI:
         self.toAlliesCheckBox = QCheckBox("allies")
         self.toNotifyCheckBox = QCheckBox("notify")
         self.toEnemiesCheckBox = QCheckBox("enemies")
+        self.toPrivateCheckBox = QCheckBox("private")
 
         for btn in (
             self.toAllCheckBox,
             self.toAlliesCheckBox,
             self.toNotifyCheckBox,
             self.toEnemiesCheckBox,
+            self.toPrivateCheckBox,
         ):
             search_layout.addWidget(btn)
         search_layout.addStretch()
@@ -127,13 +129,14 @@ class ChatTab(QWidget):
                 self.ui.toAlliesCheckBox,
                 self.ui.toNotifyCheckBox,
                 self.ui.toEnemiesCheckBox,
+                self.ui.toPrivateCheckBox,
             ),
         ):
             self.message_filters.addButton(chbx, index)
 
         self.visible_recipients = Settings.get_list(
             "replaycard.chat/visible_recipients",
-            default=[True] * 4,
+            default=[True] * 5,
             type=bool,
         )
         for index, btn in enumerate(self.message_filters.buttons()):
@@ -144,6 +147,7 @@ class ChatTab(QWidget):
                 self.visible_recipients.append(True)
 
         self.message_filters.buttonToggled.connect(self.on_message_filter_changed)
+        self._buttons_by_text = {btn.text(): btn for btn in self.message_filters.buttons()}
 
         self._search_index = 0
         self._matching_indexes: list[QModelIndex] = []
@@ -156,13 +160,14 @@ class ChatTab(QWidget):
         model = ChatTableModel(self.chat_lines)
         self.ui.chatTable.setModel(model)
 
-        btn_ids = {
-            btn.text(): self.message_filters.id(btn)
-            for btn in self.message_filters.buttons()
-        }
         for row, line in enumerate(self.chat_lines):
-            hide = not self.visible_recipients[btn_ids[line[2]]]
+            hide = not self.visible_recipients[self._filter_id(line[2])]
             self.ui.chatTable.setRowHidden(row, hide)
+
+    def _filter_id(self, recipient: str) -> int:
+        if recipient in ("all", "allies", "notify", "enemies"):
+            return self.message_filters.id(self._buttons_by_text[recipient])
+        return self.message_filters.id(self.ui.toPrivateCheckBox)
 
     def _reset_search(self) -> None:
         self.ui.chatTable.setCurrentIndex(QModelIndex())
@@ -202,9 +207,10 @@ class ChatTab(QWidget):
         self.ui.chatTable.setCurrentIndex(index)
 
     def on_message_filter_changed(self, button: QCheckBox) -> None:
-        self.visible_recipients[self.message_filters.id(button)] = button.isChecked()
+        button_id = self.message_filters.id(button)
+        self.visible_recipients[button_id] = button.isChecked()
         for row in range(len(self.chat_lines)):
-            if button.text() == self.chat_lines[row][2]:
+            if self._filter_id(self.chat_lines[row][2]) == button_id:
                 self.ui.chatTable.setRowHidden(row, not button.isChecked())
         self._reset_search()
 

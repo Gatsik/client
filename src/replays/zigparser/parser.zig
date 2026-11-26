@@ -242,11 +242,22 @@ pub const Parser = struct {
         const to = msg.table.get(.{ .string = "to" });
         const text = msg.table.get(.{ .string = "text" });
 
-        inline for ([3]?LuaValue{ sender, to, text }) |field| {
+        inline for ([2]?LuaValue{ sender, text }) |field| {
             if (field == null or std.meta.activeTag(field.?) != .string) {
                 return;
             }
         }
+
+        const recipient = switch (to orelse return) {
+            .string => |name| name,
+            .number => |army_num| blk: {
+                if (army_num < 1 or army_num > 256) {
+                    return;
+                }
+                break :blk self.header_data.players.get(@intFromFloat(army_num - 1)) orelse return;
+            },
+            else => return,
+        };
 
         const army_table = self.header_data.armies.get(@as(u8, @intCast(from))).?.table;
         const player_name = army_table.get(.{ .string = "PlayerName" }).?.string;
@@ -256,7 +267,7 @@ pub const Parser = struct {
                 .{
                     .tick = self.body_data.ticks,
                     .sender = player_name,
-                    .to = to.?.string,
+                    .to = recipient,
                     .text = text.?.string,
                     .army_num = from,
                 },

@@ -354,20 +354,25 @@ class ReplayParser(QObject):
         if function != "GiveResourcesToPlayer" or "Msg" not in lua:
             return
 
-        if not isinstance(lua["Msg"].get("to"), str):
-            return
-
         sender = int(lua["From"]) - 1
 
         # -2 => observer talking ...
         if sender == -2 or sender not in self.army:
             return
 
+        match lua["Msg"].get("to"):
+            case str(recipient):
+                pass
+            case int() | float() as army_num if int(army_num) - 1 in self.players:
+                recipient = self.players[int(army_num) - 1]
+            case _:
+                return
+
         if self.army[sender]["PlayerName"] == lua["Sender"]:
             self.chatLine.append((
                 self.ticks,
                 lua["Sender"],
-                lua["Msg"]["to"],
+                recipient,
                 lua["Msg"]["text"],
                 sender,
             ))
