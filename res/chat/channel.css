@@ -94,3 +94,9 @@ a {
 a.game_link {
 	color "{{ colors['url'] }}"
 }
+
+.col_date {
+	color: "{{ colors['default'] }}";
+	text-align: center;
+	font-weight: bold;
+}

@@ -1,5 +1,6 @@
 import html
 import time
+from collections import deque
 from collections.abc import Callable
 from collections.abc import Generator
 from typing import TYPE_CHECKING
@@ -7,6 +8,8 @@ from typing import Any
 from typing import Self
 
 import jinja2
+from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDateTime
 from PyQt6.QtCore import QObject
 from PyQt6.QtCore import Qt
 from PyQt6.QtCore import pyqtSignal
@@ -123,6 +126,7 @@ class ChannelView:
 
     def on_shown(self):
         self._channel_tab.info = TabInfo.IDLE
+        self._lines_view.refresh_day()
 
 
 class ChatAreaView:
@@ -146,6 +150,8 @@ class ChatAreaView:
         self._widget.css_reloaded.connect(self._at_css_reloaded)
         self._avatar_adder = avatar_adder
         self._formatter = formatter
+        self._separators: deque[bool] = deque()
+        self._today = QDate.currentDate()
 
         self._set_topic(self._channel.topic)
 
@@ -168,12 +174,21 @@ class ChatAreaView:
         data = self._channel.lines[-1]
         if data.meta.player.avatar.url:
             self._avatar_adder.add_avatar(data.meta.player.avatar.url())
-        text = self._formatter.format(data, self._widget.font())
-        self._widget.append_line(text)
+        if not self.refresh_day():
+            self._append_line(data)
         self._set_tab_info(data)
 
+    def _append_line(self, data: ChatLineMetadata) -> None:
+        separator = self._formatter.date_separator(data.line.time)
+        if separator:
+            self._widget.append_line(separator)
+        self._separators.append(bool(separator))
+        self._widget.append_line(self._formatter.format(data, self._widget.font()))
+
     def _remove_lines(self, number):
-        self._widget.remove_lines(number)
+        number = min(number, len(self._separators))
+        blocks = number + sum(self._separators.popleft() for _ in range(number))
+        self._widget.remove_lines(blocks)
 
     def _at_channel_updated(self, new, old):
         if new.topic != old.topic:
@@ -217,10 +232,22 @@ class ChatAreaView:
         return False
 
     def _at_css_reloaded(self):
+        self._rerender()
+
+    def _rerender(self) -> None:
         self._widget.clear_chat()
+        self._formatter.reset()
+        self._separators.clear()
         for line in self._channel.lines:
-            text = self._formatter.format(line, self._widget.font())
-            self._widget.append_line(text)
+            self._append_line(line)
+
+    def refresh_day(self) -> bool:
+        today = QDate.currentDate()
+        if today == self._today:
+            return False
+        self._today = today
+        self._rerender()
+        return True
 
 
 class ChatAvatarPixAdder:
@@ -293,6 +320,7 @@ class ChatLineFormatter:
         self._set_theme(theme)
         self._player_colors = player_colors
         self._last_timestamp = None
+        self._last_day = QDate()
 
     @classmethod
     def build(cls, theme: ThemeSet, player_colors: PlayerColors, **kwargs: Any) -> Self:
@@ -301,6 +329,30 @@ class ChatLineFormatter:
     def _set_theme(self, theme: ThemeSet) -> None:
         self._chatline_template = theme.readfile("chat/chatline.qhtml")
         self._avatar_template = theme.readfile("chat/chatline_avatar.qhtml")
+        self._date_separator_template = theme.readfile("chat/date_separator.qhtml")
+
+    def reset(self) -> None:
+        self._last_timestamp = None
+        self._last_day = QDate()
+
+    def date_separator(self, stamp: float) -> str:
+        day = QDateTime.fromMSecsSinceEpoch(int(stamp * 1000)).date()
+        if day == self._last_day:
+            return ""
+        self._last_day = day
+        self._last_timestamp = None
+        return self._date_separator_template.format(date=self._day_label(day))
+
+    @staticmethod
+    def _day_label(day: QDate) -> str:
+        today = QDate.currentDate()
+        if day == today:
+            return "Today"
+        if day == today.addDays(-1):
+            return "Yesterday"
+        if day.year() != today.year():
+            return day.toString("dddd, MMM d, yyyy")
+        return day.toString("dddd, MMM d")
 
     def _line_tags(self, data: ChatLineMetadata) -> Generator[str]:
         line = data.line

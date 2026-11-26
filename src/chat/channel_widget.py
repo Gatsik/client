@@ -247,10 +247,16 @@ class ChannelWidget(QObject):
     def append_line(self, text: str) -> None:
         self.chat_area.append(text)
 
-    def remove_lines(self, number):
-        cursor = self.chat_area.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.Start)
-        cursor.movePosition(QTextCursor.MoveOperation.Down, QTextCursor.MoveMode.KeepAnchor, number)
+    def remove_lines(self, number: int) -> None:
+        doc = self.chat_area.document()
+        frames = doc.rootFrame().childFrames()
+        if number <= 0 or not frames:
+            return
+        cursor = QTextCursor(doc)
+        if number < len(frames):
+            cursor.setPosition(frames[number].firstPosition() - 1, QTextCursor.MoveMode.KeepAnchor)
+        else:
+            cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
         cursor.removeSelectedText()
 
     def set_chatter_delegate(self, delegate):
