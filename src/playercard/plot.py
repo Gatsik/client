@@ -5,9 +5,9 @@ from PyQt6.QtCore import QDateTime
 from PyQt6.QtCore import QPointF
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QCheckBox
+lazy import numpy as np
+lazy import pyqtgraph as pg
 
-from src.heavy_modules import np
-from src.heavy_modules import pg
 from src.util import THEME
 
 

@@ -8,9 +8,9 @@ from PyQt6.QtWidgets import QStackedWidget
 from PyQt6.QtWidgets import QTabWidget
 from PyQt6.QtWidgets import QVBoxLayout
 from PyQt6.QtWidgets import QWidget
+lazy import numpy as np
+lazy import pyqtgraph as pg
 
-from src.heavy_modules import np
-from src.heavy_modules import pg
 from src.qt.graphics.labeledbargraphitem import LabeledBarGraphItem
 from src.replays.replaydetails.replayreader import ReplayParser
 from src.replays.replaydetails.tabs.gamestats_types import GameStats

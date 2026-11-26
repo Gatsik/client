@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from typing import TypedDict
 from typing import Unpack
 
-from src.heavy_modules import pg
+lazy import pyqtgraph as pg
 
 
 class BarGraphOptions(TypedDict):

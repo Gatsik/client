@@ -1,5 +1,6 @@
 import pytest
 
+import src.lazy_imports  # noqa: F401
 from src import config
 from src.model.game import Game
 from src.model.gameset import Gameset

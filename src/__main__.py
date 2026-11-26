@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtWidgets import QSplashScreen
 from PyQt6.QtWidgets import QStyleFactory
 
+import src.lazy_imports  # noqa: F401
 from src import util
 from src.config import Settings
 from src.config.version import get_release_version

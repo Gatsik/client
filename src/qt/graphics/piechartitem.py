@@ -6,9 +6,8 @@ from PyQt6.QtWidgets import QGraphicsEllipseItem
 from PyQt6.QtWidgets import QGraphicsRectItem
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem
 from PyQt6.QtWidgets import QWidget
-
-from src.heavy_modules import np
-from src.heavy_modules import pg
+lazy import numpy as np
+lazy import pyqtgraph as pg
 
 type Color = (
         # Qt defines integers in tuples as optionals so do we

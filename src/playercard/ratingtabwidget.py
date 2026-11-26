@@ -11,11 +11,11 @@ from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtWidgets import QPushButton
 from PyQt6.QtWidgets import QSpinBox
 from PyQt6.QtWidgets import QTabWidget
+lazy import pyqtgraph as pg
 
 from src.api.models.LeaderboardRating import LeaderboardRating
 from src.api.stats_api import LeaderboardRatingJournalApiConnector
 from src.config import Settings
-from src.heavy_modules import pg
 from src.model.rating import Rating
 from src.playercard.plot import LineSeries
 from src.playercard.plot import PlotController

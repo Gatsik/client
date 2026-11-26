@@ -56,7 +56,7 @@ from src.games.gameitem import GameViewBuilder
 from src.games.gamemodel import GameModel
 from src.games.hostgamewidget import UnseenMapgenNames
 from src.games.hostgamewidget import build_launcher
-from src.heavy_modules import BackgroundImporter
+from src.heavy_modules_preloader import HeavyModulesPreloader
 from src.mapGenerator.mapgenManager import MapGeneratorManager
 from src.model.chat.channel import ChannelID
 from src.model.chat.channel import ChannelType
@@ -920,7 +920,7 @@ class ClientWindow(FormClass, BaseClass):
 
         if config.Settings.get("updater/autocheck", True, type=bool):
             self._update_tools.checker.check()
-        BackgroundImporter.start()
+        HeavyModulesPreloader.start()
 
     def _connect_chat(self, me: Player) -> None:
         if not self.use_chat or self._chatMVC.connection.is_connected():

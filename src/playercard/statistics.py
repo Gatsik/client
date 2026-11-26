@@ -1,10 +1,11 @@
 from collections.abc import Generator
 from collections.abc import Iterable
 
+lazy import numpy as np
+lazy import pyqtgraph as pg
+
 from src.api.models.LeaderboardRating import LeaderboardRating
 from src.api.models.PlayerEvent import PlayerEvent
-from src.heavy_modules import np
-from src.heavy_modules import pg
 from src.playercard.events import BUILT_LOST_METRICS
 from src.playercard.events import EXPERIMENTALS_BUILT_LOST_METRICS
 from src.playercard.events import FACTION_PLAYS_METRICS
