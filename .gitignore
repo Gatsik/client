@@ -20,6 +20,7 @@ Thumbs.db
 .DS_Store
 *.orig
 res/RELEASE-VERSION
+compiled_res/
 __pycache__
 .coverage
 client_venv

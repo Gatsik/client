@@ -30,6 +30,7 @@ class UserOnlineDialog(FormClass, BaseClass):
         self.eventType = eventType
         self._settings_key = f'notifications/{eventType}'
         self.setupUi(self)
+        self.btnSave.clicked.connect(self.on_save_clicked)
         self.setStyleSheet(util.THEME.stylesheet)
 
         # remove help button
@@ -53,7 +54,7 @@ class UserOnlineDialog(FormClass, BaseClass):
         self.parent.mode = self.mode
 
     @QtCore.pyqtSlot()
-    def on_btnSave_clicked(self):
+    def on_save_clicked(self):
         self.mode = 'friends' if self.radioButtonFriends.isChecked() else 'all'
         self.saveSettings()
         self.hide()

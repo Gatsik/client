@@ -1,3 +1,5 @@
+import hashlib
+import importlib
 import logging
 import os
 import re
@@ -48,11 +50,19 @@ class Theme:
     Represents a single FAF client theme.
     """
 
-    def __init__(self, themedir: str | None, name: str | None, *, builtin: bool = False) -> None:
+    def __init__(
+        self,
+        themedir: str | None,
+        name: str | None,
+        *,
+        builtin: bool = False,
+        compiled_package: str | None = None,
+    ) -> None:
         self._themedir = themedir
         self.name = name
         self._pixmapcache: dict[str, QtGui.QPixmap | None] = {}
         self._builtin = builtin
+        self._compiled_package = compiled_package
 
     @cached_property
     def stylesheet(self) -> str | None:
@@ -116,7 +126,23 @@ class Theme:
     def loadUiType(self, filename):
         # Loads and compiles a Qt Ui file via uic, and returns the Type and
         # Basetype as a tuple
+        if (ui_type := self._load_compiled_ui_type(filename)) is not None:
+            return ui_type
         return uic.loadUiType(self._themepath(filename))
+
+    def _load_compiled_ui_type(self, filename: str) -> tuple[type, type] | None:
+        if self._compiled_package is None:
+            return None
+        module_path = filename.removesuffix(".ui").replace("/", ".")
+        try:
+            module = importlib.import_module(f"{self._compiled_package}.{module_path}")
+        except ImportError:
+            return None
+        with open(self._themepath(filename), "rb") as f:
+            if hashlib.sha256(f.read()).hexdigest() != module.UI_HASH:
+                logger.warning("Compiled %s is outdated, falling back to uic", filename)
+                return None
+        return module.FormClass, module.BaseClass
 
     @_noneIfNoFile
     def readlines(self, filename):

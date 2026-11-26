@@ -80,6 +80,8 @@ build_exe_options = {
         "Qt6Test.dll",
     ],
 
+    "packages": ["compiled_res"],
+
     "includes": [
         "pyqtgraph",
         "pydoc",

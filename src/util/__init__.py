@@ -310,7 +310,7 @@ def clearDirectory(directory, confirm=True):
 def _setup_theme() -> ThemeSet:
     # FIXME: move constants somewhere so they can be imported and used in Theme
     # instead of passing booleans and maybe even make the whole __init__ empty
-    default = Theme(COMMON_DIR, "Default", builtin=True)
+    default = Theme(COMMON_DIR, "Default", builtin=True, compiled_package="compiled_res")
     unthemed = Theme(os.path.join(BUILTIN_THEME_DIR, "unthemed"), None, builtin=True)
     themes: list[Theme] = [default]
     themes.extend(

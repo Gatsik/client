@@ -78,6 +78,10 @@ jobs:
         run: |
           python minimize_scipy.py -d scipy_ndimage
 
+      - name: Compile UI files
+        run: |
+          python compile_ui.py -d compiled_res
+
       - name: Build application
         run: |
           python setup.py build
@@ -178,6 +182,10 @@ jobs:
       - name: Shrink scipy dependency
         run: |
           python3 minimize_scipy.py -d scipy_ndimage
+
+      - name: Compile UI files
+        run: |
+          python3 compile_ui.py -d compiled_res
 
       - name: Build application
         run: |

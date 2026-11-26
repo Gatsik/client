@@ -29,6 +29,7 @@ class NewGameDialog(FormClass, BaseClass):
         self.eventType = eventType
         self._settings_key = f'notifications/{eventType}'
         self.setupUi(self)
+        self.btnSave.clicked.connect(self.on_save_clicked)
         self.setStyleSheet(util.THEME.stylesheet)
 
         # remove help button
@@ -52,7 +53,7 @@ class NewGameDialog(FormClass, BaseClass):
         self.parent.mode = self.mode
 
     @QtCore.pyqtSlot()
-    def on_btnSave_clicked(self):
+    def on_save_clicked(self):
         if self.checkBoxFriends.checkState() == QtCore.Qt.CheckState.Checked:
             self.mode = 'friends'
         else:
