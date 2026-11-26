@@ -232,7 +232,7 @@
          </spacer>
         </item>
         <item>
-         <widget class="LeaderboardLineEdit" name="searchPlayerLine">
+         <widget class="PlayerLoginEdit" name="searchPlayerLine">
           <property name="minimumSize">
            <size>
             <width>120</width>
@@ -792,6 +792,11 @@
    <class>LeaderboardTableView</class>
    <extends>QTableView</extends>
    <header location="global">src.stats.itemviews.leaderboardtableview</header>
+  </customwidget>
+  <customwidget>
+   <class>PlayerLoginEdit</class>
+   <extends>QLineEdit</extends>
+   <header location="global">src.playercard.playerloginedit</header>
   </customwidget>
   <customwidget>
    <class>LeaderboardLineEdit</class>

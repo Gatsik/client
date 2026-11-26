@@ -5,7 +5,6 @@ from PyQt6 import QtWidgets
 
 from src import util
 from src.api.ApiAccessors import ParsedDataApiResponse
-from src.api.player_api import PlayerApiConnector
 from src.api.stats_api import LeaderboardRatingApiConnector
 from src.config import Settings
 from src.qt.utils import block_signals
@@ -42,7 +41,6 @@ class LeaderboardWidget(BaseClass, FormClass):
         self.parent = parent
         self.leaderboardName = leaderboardName
         self.apiConnector = LeaderboardRatingApiConnector()
-        self.playerApiConnector = PlayerApiConnector()
         self.onlyActive = True
         self.pageNumber = 1
         self.totalPages = 1
@@ -78,10 +76,10 @@ class LeaderboardWidget(BaseClass, FormClass):
             lambda: self.findEntry(self.findInPageLine.text()),
         )
 
-        self.searchPlayerLine.typingFinished.connect(self.searchPlayer)
-        self.searchPlayerLine.returnPressed.connect(
-            self.searchPlayerInLeaderboard,
+        self.searchPlayerLine.completer().popup().setStyleSheet(
+            "background: rgb(32, 32, 37); color: orange;",
         )
+        self.searchPlayerLine.login_chosen.connect(lambda _: self.searchPlayerInLeaderboard())
         self.searchPlayerButton.clicked.connect(self.searchPlayerInLeaderboard)
 
         self.timer = QtCore.QTimer()
@@ -206,26 +204,6 @@ class LeaderboardWidget(BaseClass, FormClass):
                 if row.lower() == text.lower():
                     self.tableView.selectRow(self.model.logins.index(row))
                     break
-
-    def searchPlayer(self) -> None:
-        query = {
-            "filter": f'login=="{self.searchPlayerLine.text()}*"',
-            "page[size]": 10,
-        }
-        self.playerApiConnector.get_parsed(query, self.createPlayerCompleter)
-
-    def createPlayerCompleter(self, message: dict) -> None:
-        logins = [player["login"] for player in message["data"]]
-        self.searchPlayerLine.set_completion_list(logins)
-        completer = QtWidgets.QCompleter(
-            sorted(logins, key=lambda login: login.lower()),
-        )
-        completer.setCaseSensitivity(QtCore.Qt.CaseSensitivity.CaseInsensitive)
-        completer.popup().setStyleSheet(
-            "background: rgb(32, 32, 37); color: orange;",
-        )
-        self.searchPlayerLine.setCompleter(completer)
-        completer.complete()
 
     def onlyActiveCheckBoxChange(self, state):
         self.onlyActive = state

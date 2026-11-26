@@ -7,7 +7,6 @@ from PyQt6.QtCore import QSize
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtNetwork import QNetworkReply
-from PyQt6.QtWidgets import QCompleter
 from PyQt6.QtWidgets import QHeaderView
 from PyQt6.QtWidgets import QMessageBox
 
@@ -85,8 +84,7 @@ class LeagueLeaderboardWidget(BaseClass, FormClass):
         header.setSortIndicatorShown(True)
 
         self.subdivisionBox.currentIndexChanged.connect(self.on_subdivision_changed)
-        self.searchPlayerLine.typingFinished.connect(self.search_player_completion)
-        self.searchPlayerLine.returnPressed.connect(self.find_player)
+        self.searchPlayerLine.login_chosen.connect(lambda _: self.find_player())
         self.searchPlayerButton.clicked.connect(self.find_player)
         self.quantityBox.editingFinished.connect(self.on_page_size_changed)
         self.refreshButton.clicked.connect(self.refresh)
@@ -313,7 +311,7 @@ class LeagueLeaderboardWidget(BaseClass, FormClass):
 
     def update_completion(self) -> None:
         if self.model is not None:
-            self.searchPlayerLine.set_completion_list(self.model.logins)
+            self.searchPlayerLine.set_known_logins(self.model.logins)
 
     def select_pending_player(self) -> None:
         if self.pending_player_id is None or self.model is None:
@@ -326,22 +324,6 @@ class LeagueLeaderboardWidget(BaseClass, FormClass):
         proxy_index = proxy.mapFromSource(self.model.index(row, 0))
         self.tableView.selectRow(proxy_index.row())
         self.tableView.scrollTo(proxy_index)
-
-    def search_player_completion(self) -> None:
-        text = self.searchPlayerLine.text()
-        if not text:
-            return
-        query = {"filter": f'login=="{text}*"', "page[size]": 10}
-        self.player_api.get_parsed(query, self.create_player_completer)
-
-    def create_player_completer(self, message: ParsedDataApiResponse) -> None:
-        assert isinstance(message["data"], list)
-        logins = sorted((player["login"] for player in message["data"]), key=str.lower)
-        self.searchPlayerLine.set_completion_list(logins)
-        completer = QCompleter(logins)
-        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.searchPlayerLine.setCompleter(completer)
-        completer.complete()
 
     def find_player(self) -> None:
         login = self.searchPlayerLine.text().strip()

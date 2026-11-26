@@ -99,7 +99,7 @@
          </widget>
         </item>
         <item>
-         <widget class="LeaderboardLineEdit" name="searchPlayerLine">
+         <widget class="PlayerLoginEdit" name="searchPlayerLine">
           <property name="minimumSize">
            <size>
             <width>150</width>
@@ -442,9 +442,9 @@
    <header location="global">src.stats.itemviews.leaguetableview</header>
   </customwidget>
   <customwidget>
-   <class>LeaderboardLineEdit</class>
+   <class>PlayerLoginEdit</class>
    <extends>QLineEdit</extends>
-   <header location="global">src.stats.leaderboardlineedit</header>
+   <header location="global">src.playercard.playerloginedit</header>
   </customwidget>
  </customwidgets>
  <resources/>

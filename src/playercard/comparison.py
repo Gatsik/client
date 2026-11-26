@@ -62,8 +62,8 @@ class RatingComparisonTab(QWidget):
         self.replies: list[QNetworkReply] = []
 
         self.sides = (
-            Side(PlayerLoginEdit(logins), self._color("player-color", "orange")),
-            Side(PlayerLoginEdit(logins), self._color("me-color", "#4C9AFF")),
+            Side(PlayerLoginEdit(known_logins=logins), self._color("player-color", "orange")),
+            Side(PlayerLoginEdit(known_logins=logins), self._color("me-color", "#4C9AFF")),
         )
         for side in self.sides:
             side.edit.login_chosen.connect(partial(self.on_login_entered, side))
