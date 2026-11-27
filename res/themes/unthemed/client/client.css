@@ -724,6 +724,13 @@ RatingPlotCrosshairs::custom {
     background-color: #ffff00;
 }
 
+StatsPlot::custom {
+    background-color: #202025;
+    text-color: #C9CDD4;
+    axis-color: #4A4D55;
+    palette: #4C9AFF #F2685F #3DD68C #F5B841 #A78BFA #2EC4D6;
+}
+
 RatingPlotWidget::custom {
     color: orange;
     background-color: #202025;

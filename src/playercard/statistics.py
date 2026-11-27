@@ -12,6 +12,8 @@ from src.playercard.events import FACTION_PLAYS_METRICS
 from src.playercard.events import PlayerEventMetric
 from src.qt.graphics.labeledbargraphitem import LabeledBarGraphItem
 from src.qt.graphics.piechartitem import PieChartItem
+from src.qt.graphics.plotstyle import PlotColors
+from src.qt.graphics.plotstyle import apply_colors
 
 BAR_GROUP_WIDTH = 0.8
 
@@ -36,7 +38,8 @@ class StatsCharts:
             categories.append(metric.name)
         x_pos = np.arange(len(categories))
         bar_width = BAR_GROUP_WIDTH / 3
-        colors = ("b", "g", "r")
+        palette = PlotColors.from_theme().palette
+        colors = (palette[0], palette[2], palette[1])
         sets = (set0, set1, set2)
         names = ("Total", *set_names)
         for i, (color, name, metric) in enumerate(zip(colors, names, sets)):
@@ -50,6 +53,7 @@ class StatsCharts:
             )
             plot.addItem(bar.item)
         plot.getAxis("bottom").setTicks([[(i, name) for i, name in enumerate(categories)]])
+        apply_colors(plot)
         return plot
 
     def faction_won_lost(self, mapping: dict[str, PlayerEvent]) -> pg.PlotWidget:
@@ -91,6 +95,7 @@ class StatsCharts:
         plot.hideAxis("left")
         plot.hideAxis("bottom")
         plot.setRange(xRange=(-300, 300), yRange=(-100, 100))
+        apply_colors(plot)
         return plot
 
     def player_events_charts(

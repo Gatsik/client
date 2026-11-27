@@ -1,4 +1,6 @@
 from collections.abc import Sequence
+from itertools import cycle
+from itertools import islice
 
 from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import QPainter
@@ -6,8 +8,9 @@ from PyQt6.QtWidgets import QGraphicsEllipseItem
 from PyQt6.QtWidgets import QGraphicsRectItem
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem
 from PyQt6.QtWidgets import QWidget
-lazy import numpy as np
 lazy import pyqtgraph as pg
+
+from src.qt.graphics.plotstyle import PlotColors
 
 type Color = (
         # Qt defines integers in tuples as optionals so do we
@@ -34,9 +37,9 @@ class PieChartItem:
         self.total = sum(values) or len(values) or 1
         self.labels = labels if labels is not None else [f"Slice {i}" for i in range(len(values))]
 
+        self.theme_colors = PlotColors.from_theme()
         if colors is None:
-            hues = np.linspace(0.5, 0.6, len(values))
-            colors = [pg.colorTuple(pg.hsvColor(h, 1, 1)) for h in hues]
+            colors = list(islice(cycle(self.theme_colors.palette), len(values)))
         self.colors = colors
 
         self.radius = radius
@@ -71,7 +74,10 @@ class PieChartItem:
             rect.setPos(self.radius + 20, i * 20)
             self.legend_items.append(rect)
 
-            text = pg.TextItem(text=f"{label}: {self.values[i]} ({self.values[i]/self.total:.1%})")
+            text = pg.TextItem(
+                text=f"{label}: {self.values[i]} ({self.values[i]/self.total:.1%})",
+                color=self.theme_colors.text,
+            )
             text.setAnchor((0.0, 0.5))
             text.setParentItem(self.item)
             text.setPos(self.radius + 35, i * 20)

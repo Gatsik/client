@@ -16,7 +16,8 @@ lazy import pyqtgraph as pg
 
 from src.api.ApiBase import ReplyGroup
 from src.api.stats_api import GamePlayerStatsApiConnector
-from src.util import THEME
+from src.qt.graphics.plotstyle import PlotColors
+from src.qt.graphics.plotstyle import apply_colors
 from src.util import strtodate
 
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -71,8 +72,6 @@ class ActivityHeatmap(QWidget):
 
         self.plot = pg.PlotWidget()
         self.plot.setMinimumHeight(300)
-        background = THEME.find_stylesheet_attribute("RatingPlotWidget::custom", "background-color")
-        self.plot.setBackground(background or "#202025")
         self.plot.setMouseEnabled(x=False, y=False)
         self.plot.setMenuEnabled(False)
         self.plot.hideButtons()
@@ -82,8 +81,10 @@ class ActivityHeatmap(QWidget):
         self.plot.setRange(xRange=(0, 24), yRange=(0, 7), padding=0)
 
         self.image = pg.ImageItem(axisOrder="row-major")
-        self.image.setColorMap(pg.colormap.get("viridis"))
+        colors = PlotColors.from_theme()
+        self.image.setColorMap(pg.ColorMap((0, 1), (colors.background, colors.palette[0])))
         self.plot.addItem(self.image)
+        apply_colors(self.plot)
         self.plot.scene().sigMouseMoved.connect(self.on_mouse_moved)
 
         layout = QVBoxLayout(self)

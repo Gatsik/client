@@ -12,6 +12,8 @@ lazy import numpy as np
 lazy import pyqtgraph as pg
 
 from src.qt.graphics.labeledbargraphitem import LabeledBarGraphItem
+from src.qt.graphics.plotstyle import PlotColors
+from src.qt.graphics.plotstyle import apply_colors
 from src.replays.replaydetails.replayreader import ReplayParser
 from src.replays.replaydetails.tabs.gamestats_types import GameStats
 from src.replays.replaydetails.tabs.gamestats_types import PlayerGameStats
@@ -140,7 +142,8 @@ class PlotsWidget(QWidget):
             plot.addLegend()
             plot.setMinimumHeight(300)
 
-            for i, (color, stat) in enumerate(zip(("b", "r", "g"), ("built", "lost", "kills"))):
+            stats = ("built", "lost", "kills")
+            for i, (color, stat) in enumerate(zip(PlotColors.from_theme().palette, stats)):
                 values = [player["units"][unit_type][stat] for player in self.stats]
                 bar = LabeledBarGraphItem(
                     categories=player_names,
@@ -154,6 +157,7 @@ class PlotsWidget(QWidget):
             plot.getAxis("bottom").setTicks(
                 [[(i, name) for i, name in enumerate(player_names)]],
             )
+            apply_colors(plot)
             self.ui.unitsBreakdownLayout.addWidget(plot, index // 2, index % 2)
         self.ui.unitsBreakdownWidget.show()
 
@@ -163,9 +167,10 @@ class PlotsWidget(QWidget):
         player_names = [player["name"] for player in self.stats]
         x_pos = np.arange(len(player_names))
         bar_width = BAR_GROUP_WIDTH / 3
+        palette = PlotColors.from_theme().palette
         colors = {
-            "mass": ("b", "r", "g"),
-            "energy": ("y", "m", "c"),
+            "mass": palette[0:3],
+            "energy": palette[3:6],
         }
         for resource in ("mass", "energy"):
             plot = pg.PlotWidget(title=f"{resource.capitalize()}")
@@ -189,6 +194,7 @@ class PlotsWidget(QWidget):
                 )
                 plot.addItem(bar.item)
             plot.getAxis("bottom").setTicks([[(i, name) for i, name in enumerate(player_names)]])
+            apply_colors(plot)
             plots.append(plot)
         return plots
 
@@ -199,9 +205,10 @@ class PlotsWidget(QWidget):
         x_pos = np.arange(len(player_names))
         bar_width = BAR_GROUP_WIDTH / 2
 
+        palette = PlotColors.from_theme().palette
         colors = {
-            "mass": ("b", "c"),
-            "energy": ("y", "m"),
+            "mass": (palette[0], palette[5]),
+            "energy": (palette[3], palette[4]),
         }
         for resource in ("mass", "energy"):
             plot = pg.PlotWidget(title=f"{resource.title()} Income Breakdown")
@@ -228,6 +235,7 @@ class PlotsWidget(QWidget):
             plot.getAxis("bottom").setTicks(
                 [[(i, name) for i, name in enumerate(player_names)]],
             )
+            apply_colors(plot)
             plots.append(plot)
         return plots
 
@@ -251,14 +259,15 @@ class PlotsWidget(QWidget):
                 "experimental",
             ),
         }
+        palette = PlotColors.from_theme().palette
         colors = {
-            "land": (0, 255, 0),            # Green
-            "air": (100, 100, 255),         # Light Blue
-            "naval": (0, 0, 255),           # Dark Blue
-            "tech1": (255, 255, 0),         # Yellow
-            "tech2": (255, 128, 0),         # Orange
-            "tech3": (255, 0, 0),           # Red
-            "experimental": (255, 0, 255),  # Magenta
+            "land": palette[2],
+            "air": palette[5],
+            "naval": palette[0],
+            "tech1": palette[0],
+            "tech2": palette[2],
+            "tech3": palette[3],
+            "experimental": palette[1],
         }
 
         player_names = [player["name"] for player in self.stats]
@@ -284,12 +293,14 @@ class PlotsWidget(QWidget):
                 )
                 plot.addItem(bar.item)
             plot.getAxis("bottom").setTicks([[(i, name) for i, name in enumerate(player_names)]])
+            apply_colors(plot)
             self.ui.unitsLayout.addWidget(plot, index // 2, index % 2)
 
     def _create_kd_plot(self) -> pg.PlotWidget:
         player_names = [player["name"] for player in self.stats]
         x_pos = np.arange(len(player_names))
 
+        palette = PlotColors.from_theme().palette
         kd_plot = pg.PlotWidget(title="Kill/Death Ratio (Unit Count)")
         kd_plot.addLegend()
         kd_plot.setLabel("left", "Ratio")
@@ -304,7 +315,7 @@ class PlotsWidget(QWidget):
             x=x_pos,
             height=kd_values,
             width=BAR_GROUP_WIDTH,
-            brush="b",
+            brush=palette[0],
             name="KD ratio",
         )
         kd_plot.addItem(kd_bar.item)
@@ -313,9 +324,10 @@ class PlotsWidget(QWidget):
         line = pg.InfiniteLine(
             pos=1,
             angle=0,
-            pen=pg.mkPen("r", style=pg.QtCore.Qt.PenStyle.DashLine),
+            pen=pg.mkPen(palette[1], style=pg.QtCore.Qt.PenStyle.DashLine),
         )
         kd_plot.addItem(line)
+        apply_colors(kd_plot)
         return kd_plot
 
     def add_balance_plots(self) -> None:
@@ -330,7 +342,8 @@ class PlotsWidget(QWidget):
             plot.setLabel("left", category)
             plot.setMinimumHeight(300)
 
-            for i, (color, stat) in enumerate(zip(("b", "r", "g"), ("built", "lost", "kills"))):
+            stats = ("built", "lost", "kills")
+            for i, (color, stat) in enumerate(zip(PlotColors.from_theme().palette, stats)):
                 values = [player["general"][stat][category] for player in self.stats]
                 bar = LabeledBarGraphItem(
                     categories=player_names,
@@ -344,6 +357,7 @@ class PlotsWidget(QWidget):
             plot.getAxis("bottom").setTicks(
                 [[(i, name) for i, name in enumerate(player_names)]],
             )
+            apply_colors(plot)
             self.ui.balanceLayout.addWidget(plot, index // 2, index % 2)
         self.ui.balanceLayout.addWidget(self._create_kd_plot(), 1, 1)
 
@@ -360,11 +374,12 @@ class PlotsWidget(QWidget):
             x=x_pos,
             height=player_scores,
             width=BAR_GROUP_WIDTH,
-            brush=(0, 150, 255),
+            brush=PlotColors.from_theme().palette[0],
             name="Score",
         )
         score_plot.addItem(score_bar.item)
         score_plot.getAxis("bottom").setTicks([[(i, name) for i, name in enumerate(player_names)]])
+        apply_colors(score_plot)
         self.ui.scoreLayout.addWidget(score_plot)
 
 

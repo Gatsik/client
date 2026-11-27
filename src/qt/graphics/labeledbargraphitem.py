@@ -4,6 +4,8 @@ from typing import Unpack
 
 lazy import pyqtgraph as pg
 
+from src.qt.graphics.plotstyle import PlotColors
+
 
 class BarGraphOptions(TypedDict):
     x: Iterable[float]
@@ -38,10 +40,14 @@ class LabeledBarGraphItem:
             return
 
         if self.tooltip is None:
+            colors = PlotColors.from_theme()
+            fill = pg.mkColor(colors.background)
+            fill.setAlpha(230)
             self.tooltip = pg.TextItem(
                 anchor=(0.5, 1.0),
-                border=pg.mkPen((255, 255, 255, 100)),
-                fill=pg.mkBrush((0, 0, 0, 200)),
+                color=colors.text,
+                border=pg.mkPen(colors.axis),
+                fill=pg.mkBrush(fill),
             )
             self.tooltip.setZValue(1000)
             parent = view.parentItem()
