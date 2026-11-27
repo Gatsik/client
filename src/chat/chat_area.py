@@ -119,9 +119,9 @@ class ChatArea(QTextBrowser):
             if self._flash_index < 0:
                 self._stop_flash()
 
-    def clear_entries(self) -> None:
-        self.document().setHtml("")
-        self._entries.clear()
+    def set_entries(self, items: list[tuple[str, ChatAreaEntry]]) -> None:
+        self.document().setHtml("".join(html for html, _ in items))
+        self._entries = deque(entry for _, entry in items)
         self._invalidate()
         self._menu_index = None
         self._stop_flash()

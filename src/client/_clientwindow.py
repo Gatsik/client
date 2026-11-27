@@ -709,7 +709,7 @@ class ClientWindow(FormClass, BaseClass):
         self.load_settings()
         self._chat_config.channel_blink_interval = 500
         self._chat_config.channel_ping_timeout = 60 * 1000
-        self._chat_config.max_chat_lines = 200
+        self._chat_config.max_chat_lines = 500
         self._chat_config.chat_line_trim_count = 50
         self._chat_config.announcement_channels = ['#aeolus']
         self._chat_config.channels_to_greet_in = ['#aeolus']

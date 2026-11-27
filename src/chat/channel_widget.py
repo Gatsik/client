@@ -240,8 +240,8 @@ class ChannelWidget(QObject):
     def _load_css(self):
         self.chat_area.document().setDefaultStyleSheet(self._chat_area_css.css)
 
-    def clear_chat(self):
-        self.chat_area.clear_entries()
+    def set_lines(self, items: list[tuple[str, ChatAreaEntry]]) -> None:
+        self.chat_area.set_entries(items)
 
     def add_avatar_resource(self, url, pix):
         doc = self.chat_area.document()

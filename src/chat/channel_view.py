@@ -229,10 +229,14 @@ class ChatAreaView:
         self._set_tab_info(data)
 
     def _append_line(self, data: ChatLineMetadata) -> None:
+        for text, entry in self._line_entries(data):
+            self._widget.append_line(text, entry)
+
+    def _line_entries(self, data: ChatLineMetadata) -> Generator[tuple[str, ChatAreaEntry]]:
         separator = self._formatter.date_separator(data.line.time)
         if separator is not None:
             html, label = separator
-            self._widget.append_line(html, ChatAreaEntry(None, f"-- {label} --"))
+            yield html, ChatAreaEntry(None, f"-- {label} --")
         self._separators.append(separator is not None)
 
         parent = self._find_line(data.line.reply_to) if data.line.reply_to else None
@@ -240,7 +244,7 @@ class ChatAreaView:
         payload = None if data.line.type == ChatLineType.RAW else data
         replyable = data.line.msgid is not None and data.line.type in REPLYABLE_TYPES
         entry = ChatAreaEntry(payload, self._formatter.plain_text(data), replyable)
-        self._widget.append_line(html, entry)
+        yield html, entry
 
     def _find_line(self, msgid: str) -> ChatLineMetadata | None:
         lines = reversed(self._channel.lines)
@@ -305,11 +309,11 @@ class ChatAreaView:
         self._rerender()
 
     def _rerender(self) -> None:
-        self._widget.clear_chat()
         self._formatter.reset()
         self._separators.clear()
-        for line in self._channel.lines:
-            self._append_line(line)
+        self._widget.set_lines(
+            [item for line in self._channel.lines for item in self._line_entries(line)],
+        )
 
     def refresh_day(self) -> bool:
         today = QDate.currentDate()
