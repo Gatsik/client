@@ -3,6 +3,7 @@ from collections.abc import Callable
 from collections.abc import Iterator
 from copy import copy
 from operator import methodcaller
+from typing import Any
 from typing import cast
 
 from PyQt6.QtCore import QDateTime
@@ -79,6 +80,36 @@ class LeaderboardApiConnector(DataApiAccessor):
                 key=methodcaller("order"),
             ),
         }
+
+
+class GamePlayerStatsApiConnector(ApiAccessor):
+    MAX_PAGE_SIZE = 10000
+
+    def __init__(self) -> None:
+        super().__init__("/data/gamePlayerStats")
+
+    def get_score_times(
+        self,
+        player_id: str,
+        handler: Callable[[dict[str, Any]], None],
+        error_handler: Callable[[QNetworkReply], None],
+        before: str | None = None,
+        since: QDateTime | None = None,
+    ) -> QNetworkReply:
+        filters = [f"player.id=={player_id}", "scoreTime=isnull=false"]
+        if before is not None:
+            filters.append(f"scoreTime=lt={before}")
+        if since is not None:
+            filters.append(f"scoreTime=ge={since.toString(Qt.DateFormat.ISODate)}")
+        query: QueryOptions = {
+            "filter": ";".join(filters),
+            "fields[gamePlayerStats]": "scoreTime",
+            "sort": "-scoreTime",
+            "page[size]": self.MAX_PAGE_SIZE,
+            "page[number]": 1,
+            "page[totals]": "",
+        }
+        return self.get(query, handler, error_handler)
 
 
 class LeaderboardRatingJournalApiConnector(ApiAccessor):

@@ -1,11 +1,9 @@
 import math
 from dataclasses import dataclass
-from dataclasses import field
 from functools import partial
 from statistics import NormalDist
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtNetwork import QNetworkReply
 from PyQt6.QtWidgets import QComboBox
 from PyQt6.QtWidgets import QHBoxLayout
 from PyQt6.QtWidgets import QLabel
@@ -15,6 +13,7 @@ from PyQt6.QtWidgets import QWidget
 lazy import numpy as np
 lazy import pyqtgraph as pg
 
+from src.api.ApiBase import ReplyGroup
 from src.api.models.Leaderboard import Leaderboard
 from src.api.models.LeaderboardRating import LeaderboardRating
 from src.api.stats_api import LeaderboardRatingApiConnector
@@ -46,20 +45,19 @@ class Side:
     color: str
     login: str = ""
     ratings: dict[str, LeaderboardRating] | None = None
-    request_id: int = field(default=0)
+    request_id: int = 0
 
     def rating(self, leaderboard: str) -> Rating | None:
         assert self.ratings is not None
-        if (rating := self.ratings.get(leaderboard)) is None:
-            return None
-        return Rating(rating.mean, rating.deviation)
+        rating = self.ratings.get(leaderboard)
+        return None if rating is None else Rating(rating.mean, rating.deviation)
 
 
 class RatingComparisonTab(QWidget):
     def __init__(self, logins: list[str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.ratings_api = LeaderboardRatingApiConnector()
-        self.replies: list[QNetworkReply] = []
+        self.replies = ReplyGroup(self)
 
         self.sides = (
             Side(PlayerLoginEdit(known_logins=logins), self._color("player-color", "orange")),
@@ -106,8 +104,9 @@ class RatingComparisonTab(QWidget):
     def set_player(self, index: int, login: str, ratings: list[LeaderboardRating]) -> None:
         side = self.sides[index]
         side.request_id += 1
+        side.login = login
         side.edit.setText(login)
-        self._set_side(side, login, ratings)
+        self._set_ratings(side, ratings)
 
     def request_player(self, index: int, login: str) -> None:
         self.sides[index].edit.setText(login)
@@ -120,38 +119,26 @@ class RatingComparisonTab(QWidget):
         side.login = login
         side.ratings = None
         if login:
-            handler = partial(self._on_ratings_received, side, side.request_id, login)
-            self.replies.append(self.ratings_api.get_ratings_by_login(login, handler))
+            handler = partial(self._on_ratings_received, side, side.request_id)
+            self.replies.add(self.ratings_api.get_ratings_by_login(login, handler))
         self.refresh()
 
     def _on_ratings_received(
         self,
         side: Side,
         request_id: int,
-        login: str,
         ratings: list[LeaderboardRating],
     ) -> None:
         if request_id == side.request_id:
-            self._set_side(side, login, ratings)
+            self._set_ratings(side, ratings)
 
-    def _set_side(self, side: Side, login: str, ratings: list[LeaderboardRating]) -> None:
-        side.login = login
+    def _set_ratings(self, side: Side, ratings: list[LeaderboardRating]) -> None:
         side.ratings = {
             rating.leaderboard.technical_name: rating
             for rating in ratings
             if rating.leaderboard is not None
         }
         self.refresh()
-
-    def abort_requests(self) -> None:
-        for side in self.sides:
-            side.edit.abort_requests()
-        for reply in self.replies:
-            try:
-                reply.abort()
-            except RuntimeError:
-                pass
-        self.replies.clear()
 
     def swap(self) -> None:
         first, second = self.sides

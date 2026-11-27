@@ -21,6 +21,7 @@ from src.downloadManager import CachedImageDownloader
 from src.model.player import Player as OnlinePlayer
 from src.model.playerset import Playerset
 from src.playercard.achievements import AchievementsHandler
+from src.playercard.activity import ActivityHeatmap
 from src.playercard.avatarhandler import AvatarHandler
 from src.playercard.clantab import ClanMembershipTab
 from src.playercard.comparison import RatingComparisonTab
@@ -89,6 +90,7 @@ class PlayerProfileDialog(FormClass, BaseClass):
         self.player_event_api.events_ready.connect(self.process_player_events)
 
         self.stats_charts = StatsCharts()
+        self.activity: ActivityHeatmap | None = None
 
         self.achievements_handler = AchievementsHandler(self.verticalLayout_2, self.player_id)
         self.leagues_img_dler = CachedImageDownloader(util.DIVISIONS_CACHE_DIR, QSize(160, 80))
@@ -111,7 +113,6 @@ class PlayerProfileDialog(FormClass, BaseClass):
         self.player_api.request_player(self.player_id)
         self.player_event_api.get_player_events(self.player_id)
         self.exec()
-        self.comparison_tab.abort_requests()
 
     def on_tab_changed(self, index: int) -> None:
         if index in self._loaded_tabs:
@@ -123,6 +124,9 @@ class PlayerProfileDialog(FormClass, BaseClass):
             self.statsChartsLayout.addWidget(pie_chart)
             for chartview in self.stats_charts.player_events_charts(self.player_events):
                 self.statsChartsLayout.addWidget(chartview)
+            self.activity = ActivityHeatmap(self.player_id)
+            self.statsChartsLayout.insertWidget(0, self.activity)
+            self.activity.load_more()
         elif self.mainTabWidget.currentWidget() == self.clan_tab and self.player is not None:
             self.clan_tab.set_membership(self.player.custom_clan_membership)
         elif self.mainTabWidget.currentWidget() == self.comparison_tab:

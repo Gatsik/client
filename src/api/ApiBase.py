@@ -2,6 +2,7 @@ import json
 import logging
 from collections.abc import Callable
 from collections.abc import MutableMapping
+from functools import partial
 from typing import Any
 from typing import cast
 
@@ -285,3 +286,21 @@ class ApiAccessManager(QObject):
 
 
 ApiAccessManagerInstance = ApiAccessManager()
+
+
+class ReplyGroup:
+    def __init__(self, owner: QObject) -> None:
+        self._replies: set[QNetworkReply] = set()
+        owner.destroyed.connect(lambda: self.abort())
+
+    def add(self, reply: QNetworkReply) -> None:
+        self._replies.add(reply)
+        reply.finished.connect(partial(self._replies.discard, reply))
+
+    def abort(self) -> None:
+        for reply in tuple(self._replies):
+            try:
+                reply.abort()
+            except RuntimeError:
+                pass
+        self._replies.clear()
