@@ -33,6 +33,18 @@ def _do_nothing(*args: Any, **kwargs: Any) -> None:
     pass
 
 
+def api_error_text(reply: QNetworkReply) -> str:
+    body = reply.readAll().data().decode(errors="replace")
+    try:
+        errors = json.loads(body)["errors"]
+        details = [error.get("detail") or error.get("title") for error in errors]
+        if text := "\n".join(filter(None, details)):
+            return text
+    except (ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return f"{reply.errorString()}\n{body}".strip()
+
+
 class JsonApiBase(QObject):
     def __init__(self, route: str = "") -> None:
         super().__init__()

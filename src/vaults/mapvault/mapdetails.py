@@ -1,7 +1,6 @@
 import os
 import shutil
 
-from PyQt6.QtCore import QByteArray
 from PyQt6.QtNetwork import QNetworkReply
 from PyQt6.QtWidgets import QLabel
 from PyQt6.QtWidgets import QMessageBox
@@ -10,6 +9,7 @@ from PyQt6.QtWidgets import QWidget
 from src import util
 from src.api.ApiAccessors import DataApiAccessor
 from src.api.ApiAccessors import ParsedDataApiResponse
+from src.api.ApiBase import api_error_text
 from src.api.models.Map import Map
 from src.api.models.MapVersion import MapVersion
 from src.fa import maps
@@ -151,14 +151,12 @@ class MapDetailsWidget(DetailsWidget[Map]):
             return
 
         self.ui.hideButton.setEnabled(False)
-        patched = self.item_version.to_jsonapi_doc(
+        payload = self.item_version.to_jsonapi_payload(
             set(MapVersion.model_fields) - {"xd", "hidden"},
             {""},
             id=self.item_version.xd,
             hidden=True,
         )
-        string = str(patched).replace("'", '\"')
-        payload = QByteArray(string.encode())
         # it doesn't matter this is 'games' api
         self.games_api.patch(
             f"/data/mapVersion/{self.item_version.xd}",
@@ -178,5 +176,5 @@ class MapDetailsWidget(DetailsWidget[Map]):
             None,
             "Error",
             "Could not hide map version",
-            reply.readAll().data().decode(),
+            api_error_text(reply),
         )

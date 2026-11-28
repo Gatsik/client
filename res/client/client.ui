@@ -430,6 +430,7 @@
      <string>&amp;Tools</string>
     </property>
     <addaction name="actionCheckPlayerAliases"/>
+    <addaction name="actionModerationReports"/>
    </widget>
    <addaction name="menuLinks"/>
    <addaction name="menuOptions"/>
@@ -708,6 +709,11 @@
   <action name="actionCheckPlayerAliases">
    <property name="text">
     <string>&amp;Check player aliases</string>
+   </property>
+  </action>
+  <action name="actionModerationReports">
+   <property name="text">
+    <string>&amp;Moderation reports</string>
    </property>
   </action>
   <action name="actionIgnoreFoes">

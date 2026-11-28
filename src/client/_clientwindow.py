@@ -69,6 +69,7 @@ from src.model.player import Player
 from src.model.playerset import Playerset
 from src.model.rating import MatchmakerQueueType
 from src.model.rating import RatingType
+from src.moderation.dialogs import ModerationReportsDialog
 from src.news import NewsWidget
 from src.oauth.oauth_flow import OAuth2FlowInstance
 from src.players.players_model import PlayersFilterModel
@@ -1115,6 +1116,7 @@ class ClientWindow(FormClass, BaseClass):
         self.actionShowClientConfigFile.triggered.connect(util.showConfigFile)
         self.actionSettings.triggered.connect(self.options.show)
         self.actionCheckPlayerAliases.triggered.connect(self.checkPlayerAliases)
+        self.actionModerationReports.triggered.connect(self.show_moderation_reports)
 
     def _player_login_by_id(self, player_id: int) -> str | None:
         player = self.players.get(player_id)
@@ -1179,6 +1181,10 @@ class ClientWindow(FormClass, BaseClass):
 
     def checkPlayerAliases(self):
         self._alias_search_window.run()
+
+    def show_moderation_reports(self) -> None:
+        if self.me.player is not None:
+            ModerationReportsDialog(self.me.player.id, self).show()
 
     def saveWindow(self):
         util.settings.beginGroup("window")

@@ -49,6 +49,25 @@ class PlayerApiConnector(DataApiAccessor):
 
         self.get_parsed(query, handle)
 
+    def get_ids(
+        self,
+        logins: list[str],
+        handler: Callable[[dict[str, int]], None],
+        error_handler: Callable[[QNetworkReply], None],
+    ) -> QNetworkReply:
+        quoted = ",".join('"{}"'.format(login.replace('"', "")) for login in logins)
+        query: QueryOptions = {
+            "filter": f"login=in=({quoted})",
+            "fields[player]": "login",
+            "page[size]": len(logins),
+        }
+
+        def handle(message: ParsedDataApiResponse) -> None:
+            assert isinstance(message["data"], list)
+            handler({entry["login"].casefold(): int(entry["id"]) for entry in message["data"]})
+
+        return self.get_parsed(query, handle, error_handler)
+
     def search_logins(
         self,
         prefix: str,

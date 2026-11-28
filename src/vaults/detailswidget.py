@@ -1,6 +1,5 @@
 from operator import attrgetter
 
-from PyQt6.QtCore import QByteArray
 from PyQt6.QtCore import QDateTime
 from PyQt6.QtCore import Qt
 from PyQt6.QtCore import QUrl
@@ -16,6 +15,7 @@ from PyQt6.QtWidgets import QWidget
 
 from src import util
 from src.api.ApiAccessors import ParsedDataApiResponse
+from src.api.ApiBase import api_error_text
 from src.api.models.Map import Map
 from src.api.models.MapVersion import MapVersion
 from src.api.models.MapVersionReview import MapVersionReview
@@ -141,7 +141,7 @@ class DetailsWidget[T: Map | Mod](QWidget):
         # 'real' ones (the ones in the db) feel better)
         time = QDateTime.currentDateTimeUtc().toString(Qt.DateFormat.ISODate)
 
-        data = review.to_jsonapi_doc(
+        payload = review.to_jsonapi_payload(
             _select_relationships={"player"},
             id="null",
             score=review.score,
@@ -150,8 +150,6 @@ class DetailsWidget[T: Map | Mod](QWidget):
             updateTime=time,
             player={"id": self.player.id},
         )
-        string = str(data).replace("'", '\"')
-        payload = QByteArray(bytearray(string, "utf-8"))
         self.reviews_api.submit_review(
             self.item_version,
             payload,
@@ -182,9 +180,7 @@ class DetailsWidget[T: Map | Mod](QWidget):
         self.my_comment.show()
 
     def on_submit_error(self, reply: QNetworkReply) -> None:
-        error_body = reply.readAll().data().decode()
-        message = f"Failed to POST due to {reply.errorString()}: {error_body}"
-        QMessageBox.warning(self, "API request failed", message)
+        QMessageBox.warning(self, "API request failed", f"Failed to POST: {api_error_text(reply)}")
 
     def add_review(self) -> None:
         dialog = ReviewDialog(self.item_data, self.player, self.my_comment.review, self)
@@ -200,9 +196,9 @@ class DetailsWidget[T: Map | Mod](QWidget):
         self.my_comment.set_review(None)
 
     def on_delete_failure(self, reply: QNetworkReply) -> None:
-        error_body = reply.readAll().data().decode()
-        message = f"Failed to DELETE due to {reply.errorString()}: {error_body}"
-        QMessageBox.warning(self, "API request failed", message)
+        QMessageBox.warning(
+            self, "API request failed", f"Failed to DELETE: {api_error_text(reply)}",
+        )
         self.my_comment.show()
 
     def delete_review(self) -> None:
@@ -216,15 +212,13 @@ class DetailsWidget[T: Map | Mod](QWidget):
         self.my_comment.hide()
 
     def patch_review(self, review: VersionReview) -> None:
-        data = review.to_jsonapi_doc(
+        payload = review.to_jsonapi_payload(
             {"createTime", "updateTime"},
             {""},
             id=review.xd,
             score=review.score,
             text=review.text,
         )
-        string = str(data).replace("'", '\"')
-        payload = QByteArray(bytearray(string, "utf-8"))
         self.reviews_api.patch_review(review, payload, self.on_patch_success, self.on_patch_failure)
 
     def on_patch_success(self, reply: QNetworkReply) -> None:
@@ -239,9 +233,9 @@ class DetailsWidget[T: Map | Mod](QWidget):
         self.my_comment.fill_review_info()
 
     def on_patch_failure(self, reply: QNetworkReply) -> None:
-        error_body = reply.readAll().data().decode()
-        message = f"Failed to PATCH due to {reply.errorString()}: {error_body}"
-        QMessageBox.warning(self, "API request failed", message)
+        QMessageBox.warning(
+            self, "API request failed", f"Failed to PATCH: {api_error_text(reply)}",
+        )
 
     def submit_or_patch_review(self, review: VersionReview) -> None:
         if review.xd == "null":

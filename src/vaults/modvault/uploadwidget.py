@@ -14,6 +14,7 @@ from PyQt6.QtNetwork import QNetworkReply
 from src import util
 from src.api.ApiAccessors import ApiAccessor
 from src.api.ApiBase import ApiAccessManagerInstance
+from src.api.ApiBase import api_error_text
 from src.config import Settings
 from src.qt.utils import critical_msgbox
 from src.vaults.modvault import utils
@@ -249,24 +250,18 @@ class UploadModWidget(FormClass, BaseClass):
             self.client,
             "Mod upload error",
             "Something went wrong uploading the mod files.",
-            detailed=f"{reply.readAll().data().decode()}",
+            api_error_text(reply),
         )
 
     def completion_error(self, reply: QNetworkReply) -> None:
         self.enter_start_state()
         if reply.error() is reply.NetworkError.OperationCanceledError:
             return
-        server_response = reply.readAll().data().decode()
-        try:
-            info = json.loads(server_response)["errors"][0]["detail"]
-        except Exception:
-            info = ""
         critical_msgbox(
             self.client,
             "Mod upload error",
             "Something went wrong uploading the mod files.",
-            info,
-            server_response,
+            api_error_text(reply),
         )
 
     def complete(self) -> None:

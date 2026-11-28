@@ -1,11 +1,15 @@
+import json
 from types import UnionType
 from typing import Any
 from typing import Literal
 from typing import TypedDict
+from typing import get_args
+from typing import get_origin
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import field_validator
+from PyQt6.QtCore import QByteArray
 
 from src.util import decapitalize
 
@@ -52,6 +56,17 @@ class ConfiguredModel(BaseModel):
             },
         }
 
+    @staticmethod
+    def _relationship_target(annotation: Any) -> tuple[type[ConfiguredModel] | None, bool]:
+        if get_origin(annotation) is UnionType:
+            annotation = get_args(annotation)[0]
+        many = get_origin(annotation) is list
+        if many:
+            annotation = get_args(annotation)[0]
+        if isinstance(annotation, type) and issubclass(annotation, ConfiguredModel):
+            return annotation, many
+        return None, False
+
     @classmethod
     def to_jsonapi_doc(
             cls,
@@ -61,7 +76,7 @@ class ConfiguredModel(BaseModel):
     ) -> dict[Literal["data"], dict[str, Any]]:
         doc: dict[Literal["data"], dict[str, Any]] = {"data": {}}
         attributes = {}
-        relationships = {}
+        relationships: dict[str, Any] = {}
         doc["data"]["id"] = ""
         doc["data"]["type"] = decapitalize(cls.__name__)
         for name, field in cls.model_fields.items():
@@ -81,18 +96,34 @@ class ConfiguredModel(BaseModel):
                         value = field.annotation.__args__[0]()
                     else:
                         value = field.annotation()
-                if isinstance(value, bool):
-                    value = str(value).lower()
                 attributes[field_name] = value
-            elif issubclass(field.annotation.__args__[0], BaseModel):
-                if field_name in _select_relationships or not _select_relationships:
-                    relation = values.pop(field_name, {})
-                    if relation is None:
-                        continue
+                continue
+            klass, many = cls._relationship_target(field.annotation)
+            if klass is None:
+                if field_name in values:
+                    attributes[field_name] = values.pop(field_name)
+            elif field_name in _select_relationships or not _select_relationships:
+                relation = values.pop(field_name, {})
+                if relation is None:
+                    continue
+                if many:
+                    relationships[field_name] = {
+                        "data": [klass.to_jsonapi_relationship(r["id"])["data"] for r in relation],
+                    }
+                else:
                     relation_id = relation.get("id")
                     assert relation_id is not None, "Relationship id can't be empty."
-                    klass = field.annotation.__args__[0]
                     relationships[field_name] = klass.to_jsonapi_relationship(relation_id)
         doc["data"]["attributes"] = attributes
         doc["data"]["relationships"] = relationships
         return doc
+
+    @classmethod
+    def to_jsonapi_payload(
+        cls,
+        _exclude_fields: set[str] = set(),
+        _select_relationships: set[str] = set(),
+        **values: Any,
+    ) -> QByteArray:
+        doc = cls.to_jsonapi_doc(_exclude_fields, _select_relationships, **values)
+        return QByteArray(json.dumps(doc).encode())

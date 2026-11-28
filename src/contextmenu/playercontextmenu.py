@@ -15,6 +15,7 @@ from src.client.user import User
 from src.fa.game_runner import GameRunner
 from src.model.game import GameState
 from src.model.player import Player
+from src.moderation.dialogs import ReportDialog
 from src.playercard.playerprofiledialog import PlayerProfileDialog
 from src.power import PowerTools
 from src.user_notes.dialogs import edit_user_note
@@ -48,6 +49,7 @@ class PlayerMenuItem(Enum):
     ADD_NOTE = "Add note"
     EDIT_NOTE = "Edit note"
     REMOVE_NOTE = "Remove note"
+    REPORT = "Report player"
 
 
 class PlayerContextMenu:
@@ -84,6 +86,7 @@ class PlayerContextMenu:
         yield list(self.ignore_actions(player_id, login, is_me=is_me))
         yield list(self.note_actions(player_id, login))
         yield list(self.party_actions(player_id, is_me=is_me))
+        yield list(self.report_actions(player_id, is_me=is_me))
 
     def user_actions(self, player_id: int) -> Generator[PlayerMenuItem]:
         if player_id != -1:
@@ -198,6 +201,10 @@ class PlayerContextMenu:
         else:
             yield PlayerMenuItem.INVITE_TO_PARTY
 
+    def report_actions(self, player_id: int, *, is_me: bool) -> Generator[PlayerMenuItem]:
+        if player_id != -1 and not is_me and self._me.player is not None:
+            yield PlayerMenuItem.REPORT
+
     def get_context_menu(self, login: str, player_id: int) -> QMenu:
         return self.menu(login, player_id)
 
@@ -255,6 +262,8 @@ class PlayerContextMenu:
         elif kind == Items.REMOVE_NOTE:
             notes, key = self._note_target(player_id, login)
             notes.remove(key)
+        elif kind == Items.REPORT:
+            ReportDialog(self._me.player.id, self._parent_widget, [login]).show()
 
     def _handle_game(self, player_id: int) -> None:
         online_player = self._get_online_player_by_id(player_id)

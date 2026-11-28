@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import QWidget
 
 from src import util
 from src.api.ApiAccessors import ApiAccessor
+from src.api.ApiBase import api_error_text
 from src.api.models.MapVersion import MapSize
 from src.config import Settings
 from src.fa.maps import MapInfo
@@ -220,17 +221,11 @@ class MapUploadDialog(FormClass, BaseClass):
         self.enter_start_state()
         if reply.error() is reply.NetworkError.OperationCanceledError:
             return
-        server_response = reply.readAll().data().decode()
-        try:
-            info = json.loads(server_response)["errors"][0]["detail"]
-        except Exception:
-            info = ""
         critical_msgbox(
             self.parent(),
             "Map upload error",
             "Something went wrong uploading the map files",
-            info,
-            detailed=server_response,
+            api_error_text(reply),
         )
 
     def on_upload_success(self) -> None:
